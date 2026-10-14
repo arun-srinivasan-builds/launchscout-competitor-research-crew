@@ -72,6 +72,7 @@ def test_valid_submission_makes_no_run_and_says_so():
 def test_workflow_area_is_idle_and_not_simulated():
     at = _app()
     text = _all_markdown(at)
+    assert "Live Agent Workflow" in text
     for agent in ("Market Researcher", "Review Analyst", "Strategy Analyst", "Report Writer"):
         assert agent in text
     assert text.count(">Idle<") == 4
@@ -105,7 +106,7 @@ def test_environment_status_shows_names_not_values():
 
 def test_palette_and_theme_tokens_centralized():
     config = (ROOT / ".streamlit" / "config.toml").read_text("utf-8").lower()
-    for token in ("#13315c", "#f7f9fb", "#0b2545"):
+    for token in ("#2dd4bf", "#050c1c", "#e8eef8"):
         assert token in config
     from ui import theme
 
@@ -120,3 +121,16 @@ def test_css_only_in_theme_module():
         source = path.read_text("utf-8")
         assert "<style" not in source, path.name
         assert not re.search(r'style\s*=\s*["\']', source), path.name
+
+
+def test_branding_is_launchscout_only():
+    text = _all_markdown(_app())
+    assert "LaunchScout" in text and "Competitor Research Crew" in text
+    assert "From market intelligence to launch strategy." in text
+    assert "orchestra" not in text.lower()
+
+
+def test_flow_order_form_then_workflow_then_behind_the_scenes():
+    at = _app()
+    text = _all_markdown(at)
+    assert text.index("Describe the business idea") < text.index(">Live Agent Workflow<")

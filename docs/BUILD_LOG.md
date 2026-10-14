@@ -31,13 +31,15 @@ No breaks were reported for this window and none are assumed.
 | 5 | M2 authorization and preflight (PRP boxes, `.gitignore`, ignore verification, log update) | 14 Oct 2026 | 11:00:25 AM | system-clock | not provided | — | First clock reading after authorization; user-confirmed planning window ended 10:56 AM |
 | 6 | M2 implementation (scaffold, config, schemas, validation, run dirs, three-tab UI, tests) | 14 Oct 2026 | after 11:00:25 AM (exact start not recorded) | system-clock bound | 11:07:16 AM (final gate run completed) | system-clock | Core gate passed ~11:04 (Streamlit server log line 11:04:32); UI confirmation change applied afterwards; final gate 11:07:16 |
 | 7 | M2 documentation and commits | 14 Oct 2026 | after 11:07:16 AM | system-clock bound | not provided | — | Commit times recorded in git log, not duplicated here |
+| 8 | Pre-M3 verification (venv relocation, keys, model list, model_check) | 14 Oct 2026 | not recorded | — | not recorded | — | Ran after relocation to `D:gentic-coding-labs`; no code changes |
+| 9 | M2 UI refinement cycle (width/typography; dark workflow design from approved reference; two-panel layout; alignment corrections) | 14 Oct 2026 | not recorded (earliest system-clock reading in this phase: 11:37:46 AM) | system-clock bound | 12:24 PM (final gate) | — | Exact start/end per sub-step not recorded; final gate and this commit read from system clock at 12:24:05 PM |
 
 ## Milestone status
 
 | Milestone | Status | Start (IST) | End (IST) | Commit |
 |---|---|---|---|---|
 | M1 Requirements/repository assessment + PRP | Complete; PRP v1.1 approved by user | 10:20 AM (user-confirmed) | 10:56 AM (user-confirmed, planning window end) | none |
-| M2 Scaffold and configuration | Gate passed (ruff clean, 49 tests, smoke 200); live model check not executed; awaiting user review | after 11:00:25 AM | 11:07:16 AM final gate (system-clock) | see git log |
+| M2 Scaffold, configuration and approved UI | Complete; UI visually approved by user; ruff clean, 51 tests, smoke 200; live `gpt-6-luna` call verified | after 11:00:25 AM | final gate 12:24 PM (system-clock) | see git log |
 | M3–M8 | Not authorized | — | — | none |
 
 ## Breaks and pauses
@@ -51,6 +53,14 @@ None reported by the user.
 | 3 | Mocked model test used an id CrewAI 1.15.28 cannot construct without LiteLLM | Test split into recognizable-id and unrecognized-id cases; finding relevant to TD-1 |
 | 4 | Ruff E501 findings (5, then 8 after UI change) | Reflowed lines; per-file ignore for embedded CSS block |
 | 5 | User message cited a palette as "documented in the PRP" but it was not | Palette recorded in PRP v1.2 (flagged to user) |
+| 6 | UI refinement 1: narrow, small text; workflow cards of unequal height | Wider container, larger type, equal-height cards (CSS only); verified by Streamlit smoke, not by browser screenshot |
+| 7 | Reference-design adoption replaced the approved light palette with a dark theme; fabricated sample data in the reference (charts, percentages, avatar) not reproduced | Truthful idle content only; dark palette confirmed by user's later approval |
+| 8 | Header misalignment: "MARKET RESEARCHER" wrapped and pushed card 1 body down; later "RESEARCHER" broke mid-word | Fixed header block; step number moved to a badge on the icon; no forced word breaks |
+| 9 | Stacked layout used instead of the agreed left-panel/central-workspace layout | Two-panel layout restored (columns 3:8), sticky left card, stacked below 960 px |
+| 10 | Heading offset: hidden marker element produced a 16 px offset; first fix only hid the wrapper with `display:none` (workaround) | Marker removed; keyed container used |
+| 11 | Second alignment defect (not caught by heading coordinates alone): left form card top 437.7 vs canvas top 384.1 (53.6 px) from unequal caption heights, selector placement and an 8 px canvas margin | Section headers reserve two caption lines (`.ls-head`); selector moved into the card; canvas top margin removed; card and canvas tops both 376.1 at 1440 and 1366 px |
+| 12 | Early headless screenshots captured mid-render (blank/partial) and the dev server did not always reload imported CSS | Switched to DevTools-driven capture that waits for the canvas; server restarted before each measurement |
+| 13 | Broad `taskkill /IM python.exe` used once to stop the smoke server; could have ended unrelated Python processes | Replaced by command-line-filtered process stop; user informed |
 
 ## Validation results
 | Date | Check | Result |
@@ -61,13 +71,18 @@ None reported by the user.
 | 14 Oct 2026 | M2 gate: `pytest` | 49 passed |
 | 14 Oct 2026 | Streamlit headless smoke (health 200, `/` 200, no `runs/` created) | Passed |
 | 14 Oct 2026 | `python -m launchscout.model_check` | `status=not_configured`, `live_call_made=False`; LLM model identifier / API availability **not verified** (no `.env`, no key) |
-| 14 Oct 2026 | Visual browser review | **Not executed** |
+| 14 Oct 2026 | Visual browser review | Executed with headless Edge via DevTools at 1440, 1366, 820 and 390 px; user visually approved the final two-panel screen |
+| 14 Oct 2026 | Layout measurements (DOM rects, full refresh, cache ignored) | Headings 275.5/275.5; caption 313.5-364.1 both; form card top 376.1 = canvas top 376.1 at 1440 and 1366; no horizontal scroll; four cards equal height at all widths |
+| 14 Oct 2026 | Final M2 gate: `ruff check .` | Passed |
+| 14 Oct 2026 | Final M2 gate: `pytest` | 51 passed |
+| 14 Oct 2026 | `python -m launchscout.model_check` | `status=available`, `model=gpt-6-luna`, `live_call_made=True` (models.retrieve); CrewAI LLM construction ok |
+| 14 Oct 2026 | Live invocation of `gpt-6-luna` (chat completions, 1 prompt "Reply with exactly: ok", max 200 completion tokens) | Returned model `gpt-6-luna`, finish_reason `stop`, reply `ok`, usage 11 prompt + 4 completion = 15 tokens, ~4.1 s; same via `crewai.LLM.call` |
 
 ## Tracked dependencies (unresolved)
 | ID | Dependency | Status |
 |---|---|---|
-| TD-1 | Exact API model id for requested "GPT-6 Luna" | Unresolved; no substitution |
-| TD-2 | Local `.env` with LLM key and `SERPER_API_KEY` | Unresolved |
+| TD-1 | Exact API model id for requested "GPT-6 Luna" | Resolved: `gpt-6-luna` listed for the account and invoked live; no substitution |
+| TD-2 | Local `.env` with LLM key and `SERPER_API_KEY` | Resolved for names/presence; Serper key not yet exercised against the live API |
 | TD-3 | Original Assignment 02 text reconciliation | Unresolved; traceability caveat retained |
 
 ## Decisions recorded
@@ -81,6 +96,21 @@ None reported by the user.
 | D6 | Scheduler docs: Windows Task Scheduler first, cron second | user |
 | D7 | JSON snapshot storage | user |
 | D9 | PRP v1.1 approved; implementation authorized for **M2 only** | user |
+
+## M2 UI design (frozen)
+Dark navy/steel-blue/teal theme; left control card (about 25% width) and central Live Agent Workflow canvas (about 72%); four connected agent nodes with truthful Idle states; Manager placeholder in Hierarchical mode (M5); results and Behind the Scenes beneath the canvas; stacked below 960 px. No redesign unless a functional issue requires it.
+
+## Requirements carried into M3 (not started)
+1. Real CrewAI events drive the workflow (task/agent status, tool calls, failures); nothing simulated.
+2. Live updates during execution (polling fragment or equivalent), input panel never hidden.
+3. Crew runs in a background thread/process, not inside the Streamlit script, so widget edits cannot interrupt it.
+4. Prevent duplicate runs (disable Run while active; guard against double submit and reruns).
+5. Persist session state (run id, status, events) across Streamlit reruns and page refresh where feasible.
+6. The `AgentState` model in `ui/workflow.py` is the intended render contract.
+
+## Open items
+- `INITIAL.md` has uncommitted user edits and stale working-directory paths in it and the PRP; left untouched.
+- Venv console-script launchers and activate scripts still embed the pre-relocation path (python -m works).
 
 ## Proposed, not approved
 None.

@@ -10,24 +10,12 @@ from launchscout.config import load_settings
 from launchscout.inputs import InputValidationError, validate_input
 from launchscout.schemas import ResearchInput, ResearchMode
 from ui.theme import pill, section
+from ui.workflow import render_workflow_html
 
 MODE_LABELS = {
     ResearchMode.SEQUENTIAL: "Sequential",
     ResearchMode.HIERARCHICAL: "Hierarchical",
 }
-
-# Static roster from the PRP. Statuses are idle until M3 wires real CrewAI events.
-AGENT_ROSTER: tuple[tuple[str, str, str], ...] = (
-    ("Market Researcher", "Finds 3-5 real competitors, offers, prices and sales channels.",
-     "Planned tools: web search, website scraper"),
-    ("Review Analyst", "Collects attributable customer praise and complaints.",
-     "Planned tools: web search, website scraper"),
-    ("Strategy Analyst", "Compares competitors; recommends gap, price and positioning.",
-     "No tools: reasons over the research outputs"),
-    ("Report Writer", "Writes the six-section sourced report to file.",
-     "Planned tool: file writer"),
-)
-
 
 def _esc(text: str) -> str:
     return html.escape(text, quote=True)
@@ -35,29 +23,11 @@ def _esc(text: str) -> str:
 
 def _render_workflow(mode: ResearchMode) -> None:
     section(
-        "Agent workflow",
-        "No research has been run. Every agent is idle. Live status from real CrewAI events "
-        "will appear here once execution is added (M3); nothing below is simulated progress.",
+        "Live Agent Workflow",
+        "All agents are idle: no research has run. Live status will come from real CrewAI "
+        "events in M3; nothing here is simulated.",
     )
-    if mode is ResearchMode.HIERARCHICAL:
-        st.markdown(
-            '<div class="ls-step ls-manager"><div class="ls-step-title">Manager agent</div>'
-            '<div class="ls-step-desc">Coordinates and delegates to the four specialists. '
-            "Hierarchical execution is not yet available (M5).</div>"
-            f"{pill('Idle', 'idle')}{pill('Not yet implemented', 'warn')}</div>",
-            unsafe_allow_html=True,
-        )
-    columns = st.columns(len(AGENT_ROSTER))
-    for index, (column, (name, description, tools)) in enumerate(
-        zip(columns, AGENT_ROSTER, strict=True), start=1
-    ):
-        column.markdown(
-            f'<div class="ls-step"><div class="ls-step-num">{index}</div>'
-            f'<div class="ls-step-title">{_esc(name)}</div>'
-            f'<div class="ls-step-desc">{_esc(description)}<br>{_esc(tools)}</div>'
-            f"{pill('Idle', 'idle')}</div>",
-            unsafe_allow_html=True,
-        )
+    st.markdown(render_workflow_html(mode), unsafe_allow_html=True)
 
 
 def _render_behind_the_scenes() -> None:
@@ -113,43 +83,47 @@ def _render_validated(research_input: ResearchInput) -> None:
     )
 
 
-def render() -> None:
+def _render_input_panel() -> tuple[ResearchMode, bool, tuple[str, str, str, str]]:
+    """Left control panel: heading, then one card with the fields, mode selector and button."""
     section("Describe the business idea", "Fields marked * are required.")
-    mode = st.radio(
-        "Research mode",
-        options=list(MODE_LABELS.keys()),
-        format_func=lambda m: MODE_LABELS[m],
-        horizontal=True,
-        key="research_mode",
-        help="Sequential runs the four specialists in order. Hierarchical adds a Manager "
-        "agent that delegates; its execution arrives in a later milestone.",
-    )
-    with st.form("research_form", border=False):
+    with st.container(border=True, key="ls_left_card"):
         idea = st.text_input(
             "Business idea *",
-            placeholder="e.g. Healthy millet meal boxes delivered for lunch",
+            placeholder="e.g. Healthy millet meal boxes",
             max_chars=300,
         )
-        col_city, col_customer = st.columns(2)
-        city = col_city.text_input("City / target market *", placeholder="e.g. Coimbatore")
-        customer = col_customer.text_input(
-            "Target customer *", placeholder="e.g. office workers aged 25-40"
-        )
+        city = st.text_input("City / target market *", placeholder="e.g. Coimbatore")
+        customer = st.text_input("Target customer *", placeholder="e.g. office workers aged 25-40")
         known = st.text_area(
             "Known competitors (optional)",
             placeholder="Comma or line separated. These are starting points, not verified facts.",
-            height=90,
+            height=110,
         )
-        submitted = st.form_submit_button("Run Research", type="primary")
+        mode = st.radio(
+            "Research mode",
+            options=list(MODE_LABELS.keys()),
+            format_func=lambda m: MODE_LABELS[m],
+            horizontal=True,
+            key="research_mode",
+            help="Sequential runs the four specialists in order. Hierarchical adds a Manager "
+            "agent that delegates; its execution arrives in a later milestone.",
+        )
+        submitted = st.button("Run Research", type="primary", key="run_research")
+    return mode, submitted, (idea, city, customer, known)
 
-    if submitted:
-        try:
-            research_input = validate_input(idea, city, customer, known, mode)
-        except InputValidationError as exc:
-            for message in exc.errors.values():
-                st.error(message)
-        else:
-            _render_validated(research_input)
 
-    _render_workflow(mode)
-    _render_behind_the_scenes()
+def render() -> None:
+    left, center = st.columns([3, 8], gap="large")
+    with left, st.container(key="ls_left_panel"):
+        mode, submitted, (idea, city, customer, known) = _render_input_panel()
+    with center:
+        _render_workflow(mode)
+        if submitted:
+            try:
+                research_input = validate_input(idea, city, customer, known, mode)
+            except InputValidationError as exc:
+                for message in exc.errors.values():
+                    st.error(message)
+            else:
+                _render_validated(research_input)
+        _render_behind_the_scenes()

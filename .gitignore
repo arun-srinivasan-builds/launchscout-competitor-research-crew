@@ -29,3 +29,6 @@ data/
 Thumbs.db
 .idea/
 .vscode/
+
+# UI review screenshots (local only)
+shots/

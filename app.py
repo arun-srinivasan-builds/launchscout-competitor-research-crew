@@ -11,11 +11,7 @@ from ui.theme import TAB_LABELS, hero, inject_theme
 def main() -> None:
     st.set_page_config(page_title="LaunchScout", page_icon=None, layout="wide")
     inject_theme()
-    hero(
-        "LaunchScout",
-        "Sourced competitor research for a new business idea: competitors, prices, "
-        "customer complaints, market gap and a 30-day launch plan.",
-    )
+    hero("LaunchScout", "Competitor Research Crew", "From market intelligence to launch strategy.")
     research, deck, weekly = st.tabs(list(TAB_LABELS))
     with research:
         research_tab.render()
