@@ -42,6 +42,8 @@ class RunLimits(BaseModel):
     agent_timeout_s: int = 420
     tool_retries: int = 1
     run_timeout_s: int = 1200
+    # Hard stop on model calls per run (observed runs used 10-13; see LLM audit).
+    max_llm_calls: int = 40
     cancel_grace_s: int = 60
 
 

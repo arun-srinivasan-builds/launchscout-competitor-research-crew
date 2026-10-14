@@ -287,6 +287,27 @@ Hard rules:
 
 ---
 
+## 9a. LLM efficiency standards (mandatory, added after the M3 audit)
+
+Rationale: the M3 audit (`docs/LLM_EFFICIENCY_AUDIT.md`) measured 10-13 model calls and 53k-74k
+tokens per complete run, 86-91% of them prompt tokens. Model calls are the dominant cost and must
+be spent only where reasoning is required.
+
+| ID | Standard | Enforcement |
+|---|---|---|
+| E-01 | No model call without an explicit user action (Run Research, Run again, Generate deck, Rerun now). UI reruns, polling, tab changes, downloads, exports and renders make zero model calls | Tests with sentinels on `build_llm` and `crewai.LLM.call` and an executor call counter |
+| E-02 | One active research run at a time; identical input reuses the completed result and requires an explicit "Run again" | `RunManager.start`, `find_reusable`; tests |
+| E-03 | Validation, acceptance gate, link checks, formatting, Markdown/PDF/PPTX export and price comparison are deterministic Python. Modules for them may not import `crewai`, `openai`, `litellm` or `launchscout.llm` | AST import test |
+| E-04 | Bounded budgets: per-agent search and page-read budgets, run totals, bounded retries, `max_iter`, per-agent and run timeouts, and a hard `max_llm_calls` per run | `RunLimits`; tests |
+| E-05 | Reuse verified evidence and structured agent outputs (ledger, `competitors.json`, `reviews.json`, `strategy.json`) instead of regenerating them; pass structured subsets between tasks | Design rule; M4/M5 tests |
+| E-06 | The pitch deck is built from the validated report and stored structured outputs only; it has no search or scrape tools and never repeats market research | M6 tests (zero tool calls) |
+| E-07 | Weekly reruns check known competitors' prices deterministically first; the model is used only for discovery or when extraction fails; the diff is pure Python | M7 tests |
+| E-08 | Per-agent LLM calls, tokens, tool outcomes (executed, cache hit, refused, error), latency and retries are measured and shown; usage is `measured` or `unavailable`, never estimated | `agent_metrics`; tests |
+| E-09 | Efficiency changes must not reduce research quality: competitors with evidence, verified prices, sourced findings and report completeness are compared against the recorded baseline before a change is accepted | Audit doc quality guard |
+| E-10 | Each standard has an automated test; a change that breaks one is a defect | `tests/test_efficiency.py` and milestone tests |
+
+---
+
 ## 10. Traceability matrix
 
 Status for every row starts `Not started`.

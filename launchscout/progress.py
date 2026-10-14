@@ -41,6 +41,7 @@ EventKind = Literal[
     "run_cancel_requested",
     "run_cancelled",
     "run_timeout",
+    "run_budget_stop",
     "run_finished",
 ]
 
@@ -103,9 +104,9 @@ def reduce_events(
     stopping = False  # cancel/timeout requested: later task/agent errors are the stop itself
 
     for event in events:
-        if event.kind in ("run_cancel_requested", "run_timeout"):
+        if event.kind in ("run_cancel_requested", "run_timeout", "run_budget_stop"):
             stopping = True
-        if event.kind in ("run_cancelled", "run_timeout", "crew_failed"):
+        if event.kind in ("run_cancelled", "run_timeout", "crew_failed", "run_budget_stop"):
             run_state = event.kind
         key = AGENT_KEYS.get(event.agent or "")
         if key is None:
@@ -120,6 +121,8 @@ def reduce_events(
             tool = str(event.data.get("tool", ""))
             label[key] = _TOOL_LABELS.get(tool.lower().replace(" ", "_"), "Using a tool")
             calls[key].append(f"{stamp} {event.summary}")
+        elif event.kind == "tool_note" and event.data.get("outcome") in ("executed", "cache_hit"):
+            pass  # measured per call (see metrics); not shown as a card line
         elif event.kind in ("tool_finished", "tool_error", "tool_note"):
             lines[key].append(f"{stamp} {event.summary}")
         elif event.kind == "llm_completed":
@@ -135,10 +138,12 @@ def reduce_events(
                 status[key], label[key] = AgentStatus.FAILED, "Failed"
             lines[key].append(f"{stamp} {event.summary}")
 
-    if run_state in ("run_cancelled", "run_timeout", "crew_failed"):
+    if run_state in ("run_cancelled", "run_timeout", "crew_failed", "run_budget_stop"):
         for key in AGENT_ORDER:
             if status[key] is AgentStatus.ACTIVE:
-                if run_state == "run_cancelled":
+                if run_state == "run_budget_stop":
+                    status[key], label[key] = AgentStatus.CANCELLED, "Stopped (LLM limit)"
+                elif run_state == "run_cancelled":
                     status[key], label[key] = AgentStatus.CANCELLED, "Cancelled"
                 elif run_state == "run_timeout":
                     status[key], label[key] = AgentStatus.FAILED, "Timed out"
@@ -160,3 +165,52 @@ def reduce_events(
         )
         for key in AGENT_ORDER
     }
+
+
+def agent_metrics(events: Iterable[RunEvent]) -> dict[str, dict[str, int | float]]:
+    """Per-agent efficiency numbers (LLM calls, tokens, tool outcomes, seconds), from events."""
+    out: dict[str, dict[str, int | float]] = {}
+    started: dict[str, datetime] = {}
+
+    def row(agent: str | None) -> dict[str, int | float]:
+        return out.setdefault(
+            agent or "(run)",
+            {
+                "llm_calls": 0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "tool_calls": 0,
+                "executed": 0,
+                "cache_hits": 0,
+                "refused_budget": 0,
+                "tool_errors": 0,
+                "tool_ms": 0,
+                "seconds": 0.0,
+            },
+        )
+
+    for event in events:
+        r = row(event.agent)
+        if event.kind == "llm_completed":
+            r["llm_calls"] += 1
+            for name in ("prompt_tokens", "completion_tokens", "total_tokens"):
+                value = event.data.get(name)
+                if isinstance(value, int | float):
+                    r[name] += int(value)
+        elif event.kind == "tool_started":
+            r["tool_calls"] += 1
+        elif event.kind == "tool_note" and event.data.get("outcome"):
+            outcome = str(event.data["outcome"])
+            key = {"executed": "executed", "cache_hit": "cache_hits",
+                   "refused_budget": "refused_budget", "error": "tool_errors"}.get(outcome)
+            if key:
+                r[key] += 1
+            ms = event.data.get("ms")
+            if isinstance(ms, int | float):
+                r["tool_ms"] += int(ms)
+        elif event.kind == "task_started" and event.agent:
+            started[event.agent] = event.ts
+        elif event.kind in ("task_completed", "task_failed") and event.agent in started:
+            r["seconds"] += round((event.ts - started[event.agent]).total_seconds(), 1)
+    return out

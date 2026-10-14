@@ -44,7 +44,13 @@ def _tool_argument(tool_args: Any) -> str:
 class EventCollector:
     """Per-run event log. Thread-safe; mirrors every event to `events.jsonl` when given."""
 
-    def __init__(self, jsonl_path: Path | None = None, clock: Callable[[], datetime] | None = None):
+    def __init__(
+        self,
+        jsonl_path: Path | None = None,
+        clock: Callable[[], datetime] | None = None,
+        llm_limit: int | None = None,
+        on_llm_limit: Callable[[int], None] | None = None,
+    ):
         self._lock = threading.Lock()
         self._events: list[RunEvent] = []
         self._path = jsonl_path
@@ -54,6 +60,11 @@ class EventCollector:
         self.total_tokens = 0
         self.llm_calls = 0
         self.usage_reported = False
+        self.tool_started = 0
+        self.llm_events = 0
+        self._llm_limit = llm_limit
+        self._on_llm_limit = on_llm_limit
+        self._limit_fired = False
 
     def emit(
         self,
@@ -74,25 +85,41 @@ class EventCollector:
             summary=redact(_clip(summary)),
             data={k: (redact(v) if isinstance(v, str) else v) for k, v in data.items()},
         )
+        fire = False
         with self._lock:
             self._events.append(event)
+            if kind == "tool_started":
+                self.tool_started += 1
+            if kind == "llm_completed":
+                self.llm_events += 1
+                if (
+                    self._llm_limit is not None
+                    and self.llm_events > self._llm_limit
+                    and not self._limit_fired
+                ):
+                    self._limit_fired = True
+                    fire = True
             if self._path is not None:
                 with self._path.open("a", encoding="utf-8") as handle:
                     handle.write(event.model_dump_json() + "\n")
+        if fire and self._on_llm_limit is not None:
+            self._on_llm_limit(self.llm_events)
         return event
 
-    def add_usage(self, usage: Any) -> None:
-        """Accumulate provider-reported token usage (measured only)."""
+    @staticmethod
+    def usage_triplet(usage: Any) -> tuple[int, int, int]:
+        """(prompt, completion, total) tokens from a provider usage object, 0 when absent."""
 
         def pick(name: str) -> int:
             value = usage.get(name) if isinstance(usage, dict) else getattr(usage, name, None)
             return int(value) if isinstance(value, int | float) else 0
 
-        prompt, completion, total = (
-            pick("prompt_tokens"),
-            pick("completion_tokens"),
-            pick("total_tokens"),
-        )
+        prompt, completion = pick("prompt_tokens"), pick("completion_tokens")
+        return prompt, completion, pick("total_tokens") or (prompt + completion)
+
+    def add_usage(self, usage: Any) -> None:
+        """Accumulate provider-reported token usage (measured only)."""
+        prompt, completion, total = self.usage_triplet(usage)
         if not (prompt or completion or total):
             return
         with self._lock:
@@ -283,7 +310,17 @@ def install_listeners() -> None:
 
     @on(LLMCallCompletedEvent)
     def _llm_done(c: EventCollector, e: Any) -> None:
-        c.add_usage(getattr(e, "usage", None))
-        c.emit("llm_completed", "Model call completed", _role(e), status="ok")
+        usage = getattr(e, "usage", None)
+        c.add_usage(usage)
+        prompt, completion, total = c.usage_triplet(usage)
+        c.emit(
+            "llm_completed",
+            "Model call completed",
+            _role(e),
+            status="ok",
+            prompt_tokens=prompt or None,
+            completion_tokens=completion or None,
+            total_tokens=total or None,
+        )
 
     _installed = True

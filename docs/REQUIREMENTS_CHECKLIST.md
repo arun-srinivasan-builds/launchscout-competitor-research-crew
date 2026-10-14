@@ -16,6 +16,16 @@
 | R-07 | Run-specific directories | `launchscout/runs.py` | `tests/test_runs.py` (4) | Partial (report/export use in M4) |
 | G-01..G-04, G-06 | Acceptance gate, evidence validation, tools | `tools.py`, `evidence.py`, `grounding.py` | `test_tools.py`, `test_grounding.py` | Partial: caps, cache, injection envelope and ledger grounding done (M3); acceptance gate and report validators M4 |
 | G-05 | Secrets excluded | `.gitignore`, `.env.example`, `launchscout/logging_utils.py` | `tests/test_secrets.py` (5), `tests/test_config.py` | **Done** |
+| E-01 | No model call from UI reruns, polling, tabs, downloads | `ui/research_tab.py`, `launchscout/runner.py` | `test_efficiency.py` (3 tests) | **Done (M3 scope)**; downloads/exports verified when added (M4) |
+| E-02 | One active run; explicit reuse of completed results | `runner.py`, `ui/research_tab.py` | `test_runner.py::test_duplicate_run_prevented_while_active`, `test_efficiency.py` (3 tests) | **Done (M3)** |
+| E-03 | Deterministic modules import no LLM code | `grounding`, `evidence`, `progress`, `runs`, `inputs`, `schemas`, `config`, `logging_utils` | `test_efficiency.py::test_deterministic_modules_import_no_llm_code` | Partial: extend to `validation`, `report`, `exports/*`, `deck` claim checks, `weekly/diff` (M4, M6, M7) |
+| E-04 | Bounded budgets, retries, timeouts, LLM-call cap | `config.RunLimits`, `tools.py`, `runner.py` | `test_tools.py`, `test_runner.py`, `test_efficiency.py::test_llm_call_limit_stops_the_run` | **Done (M3)** |
+| E-05 | Reuse evidence and structured outputs | `evidence.py`, run artifacts | `test_runner.py` (persistence) | Partial: structured hand-off between tasks and cross-run evidence cache (M4/M5, M7) |
+| E-06 | Deck never repeats research | — | — | Not started (M6) |
+| E-07 | Weekly rerun deterministic-first | — | — | Not started (M7) |
+| E-08 | Per-agent calls, tokens, outcomes, latency measured | `events.py`, `progress.agent_metrics`, `tools.py` | `test_efficiency.py::test_tool_outcomes_and_per_agent_metrics_are_measured` | **Done (M3)**; first live run with per-agent tokens still to be recorded |
+| E-09 | Quality preserved when optimizing | `docs/LLM_EFFICIENCY_AUDIT.md` baseline | — | Process rule; applied from M4 |
+| E-10 | Each standard has an automated test | `tests/test_efficiency.py` | 17 tests | Partial (E-06, E-07 pending their milestones) |
 | PR-01 | Partial-report behaviour | — | — | Not started (M4) |
 | SA-01 | Hierarchical + Manager | — | — | Not started (M5) |
 | SA-02 | Mode selector in Research Workspace | `ui/research_tab.py` | `test_ui_structure.py::test_selector_in_research_tab` | Partial (placement only; wired in M5) |

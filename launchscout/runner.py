@@ -33,7 +33,7 @@ from launchscout.grounding import (
     report_unsupported_urls,
 )
 from launchscout.logging_utils import get_logger, redact
-from launchscout.progress import AGENT_ORDER, AgentState, RunEvent, reduce_events
+from launchscout.progress import AGENT_ORDER, AgentState, RunEvent, agent_metrics, reduce_events
 from launchscout.runs import RunPaths, create_run_dir
 from launchscout.schemas import (
     CompetitorSet,
@@ -78,6 +78,10 @@ class RunSnapshot(BaseModel):
     completed_tasks: list[str] = Field(default_factory=list)
     model_name: str | None = None
 
+    def agent_metrics(self) -> dict[str, dict[str, int | float]]:
+        """Per-agent efficiency numbers derived only from recorded events."""
+        return agent_metrics(self.events)
+
     @property
     def active(self) -> bool:
         return self.phase != "finished"
@@ -110,7 +114,12 @@ class ResearchRun:
         self.started_at = started_at
         self.finished_at: datetime | None = None
         self.today: date = started_at.astimezone().date()
-        self.collector = EventCollector(paths.events_jsonl)
+        self.llm_limit_hit = False
+        self.collector = EventCollector(
+            paths.events_jsonl,
+            llm_limit=limits.max_llm_calls,
+            on_llm_limit=self._on_llm_limit,
+        )
         self.ledger = EvidenceLedger()
         self.ctx = ToolContext(
             ledger=self.ledger,
@@ -135,6 +144,17 @@ class ResearchRun:
         self.cancel_requested = False
         self.thread: threading.Thread | None = None
         self._lock = threading.Lock()
+
+    def _on_llm_limit(self, count: int) -> None:
+        """Hard stop: the run made more model calls than the configured limit."""
+        self.llm_limit_hit = True
+        self.phase = "stopping"
+        self.ctx.cancel_event.set()
+        self.collector.emit(
+            "run_budget_stop",
+            f"LLM call limit ({self.limits.max_llm_calls}) exceeded after {count} calls; stopping",
+            status="error",
+        )
 
     # -- called from the worker/executor --------------------------------------------------
     def record_output(self, task_name: str, raw: str) -> None:
@@ -189,8 +209,26 @@ class ResearchRun:
             completion_tokens=completion if measured else None,
             serper_calls=counters["serper_calls"],
             scrape_calls=counters["scrape_calls"],
-            cache_hits=counters["cache_hits"],
+            # wrapper cache hits plus calls CrewAI's own cache answered before our tool ran
+            cache_hits=counters["cache_hits"]
+            + max(0, c.tool_started - self.ctx.invocations),
+            llm_calls=c.llm_events or None,
         )
+
+
+def input_key(research_input: ResearchInput) -> tuple[str, ...]:
+    """Normalised identity of a research request (case, spacing and list order ignored)."""
+
+    def norm(text: str) -> str:
+        return " ".join(text.casefold().split())
+
+    return (
+        norm(research_input.idea),
+        norm(research_input.city),
+        norm(research_input.target_customer),
+        "|".join(sorted(norm(c) for c in research_input.known_competitors)),
+        research_input.mode.value,
+    )
 
 
 def _default_executor(run: ResearchRun) -> None:
@@ -250,6 +288,16 @@ class RunManager:
             run = self._runs.get(run_id)
         if run is not None:
             return run.snapshot()
+        return None
+
+    def find_reusable(self, research_input: ResearchInput) -> str | None:
+        """Run id of the newest completed run with identical input, else None (no API use)."""
+        wanted = input_key(research_input)
+        with self._lock:
+            for run_id in reversed(self._order):
+                run = self._runs[run_id]
+                if run.status == "complete" and input_key(run.input) == wanted:
+                    return run_id
         return None
 
     # -- commands --------------------------------------------------------------------------
@@ -368,10 +416,14 @@ class RunManager:
             g is not None and g.value is not None for g in (comp, rev, strat)  # type: ignore[union-attr]
         )
         have_report = report_text is not None
+        if run.llm_limit_hit and not error:
+            error = f"LLM call limit ({run.limits.max_llm_calls}) reached"
         if run.timed_out:
             status = "timeout"
         elif run.cancel_requested:
             status = "cancelled"
+        elif run.llm_limit_hit:
+            status = "partial" if (outputs or have_report) else "failed"
         elif error and not outputs:
             status = "failed"
         elif error or not (parsed_ok and have_report and len(outputs) == len(TASK_ORDER)):
@@ -386,8 +438,9 @@ class RunManager:
             run.status = status
             run.error = error
             run.finished_at = datetime.now(UTC)
+        self._persist(run)  # artifacts are on disk before the run is reported finished
+        with run._lock:
             run.phase = "finished"
-        self._persist(run)
 
     def _persist(self, run: ResearchRun) -> None:
         snap = run.snapshot()

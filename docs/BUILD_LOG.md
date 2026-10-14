@@ -41,6 +41,7 @@ No breaks were reported for this window and none are assumed.
 | M1 Requirements/repository assessment + PRP | Complete; PRP v1.1 approved by user | 10:20 AM (user-confirmed) | 10:56 AM (user-confirmed, planning window end) | none |
 | M2 Scaffold, configuration and approved UI | Complete; UI visually approved by user; ruff clean, 51 tests, smoke 200; live `gpt-6-luna` call verified | after 11:00:25 AM | final gate 12:24 PM (system-clock) | see git log |
 | M3 Real sequential CrewAI execution | Implemented; live runs L1-L4 executed; awaiting user acceptance review (uncommitted) | not recorded | not recorded | none yet |
+| M3 efficiency follow-up | Audit complete; standards added; code and tests done; awaiting review | not recorded | not recorded | see git log |
 | M4–M8 | Not authorized | — | — | none |
 
 ## Breaks and pauses
@@ -143,6 +144,22 @@ Total measured across L1-L4: 185,135 tokens, 35 Serper searches, 28 page reads (
 | 9 | Test assumption wrong: identical queries are cache hits, not two Serper calls | Test corrected (1 call, 2 cache hits) |
 
 Rework cycles: 3 (budgets, cancellation, test isolation). Known limits: cancel/timeout are cooperative and wait for the in-flight model or tool call; page-read prices are not machine-checked against page text (M4 validators); a restarted server does not auto-display previous runs (artifacts remain in `runs/`; `snapshot_from_disk` restores them programmatically); Streamlit reload of changed `launchscout` modules resets the in-process manager (development only).
+
+## M3 close-out and LLM efficiency audit (14 Oct 2026)
+
+| Item | Result |
+|---|---|
+| Part A checks | `ruff check .` clean; `pytest` 112 passed at the M3 commit; no listeners on ports 8599/9333-9335 and no streamlit/python run processes remained (stale headless Edge debug instances from the browser drivers were stopped); the run manager lives only in the (stopped) server process, so no research job was active |
+| M3 commit | `440acc7` ("M3: real sequential CrewAI execution with live workflow, guarded tools and run lifecycle"); staged files reviewed: no `.env`, `runs/`, `shots/`, `.venv` or temp files; key values absent from the staged diff (fake `sk-` fixtures in tests only); `INITIAL.md` included with the path correction and the user's existing edits |
+| Efficiency audit | `docs/LLM_EFFICIENCY_AUDIT.md`: baseline from existing logs only, no additional API calls |
+| Standards | PRP section 9a (E-01..E-10) and checklist rows E-01..E-10 |
+| Code changes after the audit | per-call tokens and tool outcomes with latency in events; per-agent efficiency table; CrewAI cache answers counted; hard `max_llm_calls` (40); explicit reuse of identical completed runs; artifacts persisted before a run is reported finished |
+| Tests | 129 passed (17 new in `tests/test_efficiency.py`, run twice for stability); ruff clean |
+| Audit defects found in M3 code | (a) cache answers from CrewAI's own cache uncounted; (b) no per-call tokens; (c) no hard model-call cap; (d) run reported finished before artifacts were written (found by a flaky test) |
+| Not done (by instruction) | No live calls; M4 not started; efficiency changes are a separate commit after `440acc7` (see git log) |
+
+Note on per-agent tokens: they were not recorded in L1-L4, so the first live run after this change
+is needed to populate them; this was not run because the audit forbade new API calls.
 
 ## Requirements carried into M4+ (unchanged)
 - Acceptance gate, report validators and link checks, `-PARTIAL` naming, PDF/Markdown export (M4).

@@ -71,3 +71,6 @@ Not applicable in M2 (no research executed). Verified source coverage: n/a. Unsu
 | Milestone | Full suite | Result |
 |---|---|---|
 | M2 | 49 tests | 49 passed |
+| M2 UI | 51 tests | 51 passed |
+| M3 (commit 440acc7) | 112 tests | 112 passed |
+| M3 efficiency follow-up | 129 tests | 129 passed (run twice) |

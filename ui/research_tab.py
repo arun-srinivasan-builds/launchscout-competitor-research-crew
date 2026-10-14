@@ -14,8 +14,8 @@ import streamlit as st
 
 from launchscout.config import load_settings
 from launchscout.inputs import InputValidationError, validate_input
-from launchscout.runner import RunSnapshot, get_manager
-from launchscout.schemas import ResearchMode
+from launchscout.runner import RunManager, RunSnapshot, get_manager
+from launchscout.schemas import ResearchInput, ResearchMode
 from ui.theme import pill, section
 from ui.workflow import render_workflow_html
 
@@ -25,6 +25,7 @@ MODE_LABELS = {
 }
 POLL_SECONDS = 1.5
 SESSION_RUN_KEY = "active_run_id"
+REUSE_KEY = "reuse_input"
 _MAX_TABLE_ROWS = 200
 
 
@@ -221,6 +222,7 @@ def _render_bts_run(snap: RunSnapshot) -> None:
             "Search calls / page reads / cache hits",
             f"{usage.serper_calls} / {usage.scrape_calls} / {usage.cache_hits}",
         ),
+        ("Model calls", str(usage.llm_calls if usage.llm_calls is not None else "unavailable")),
         ("Tool calls recorded", str(len(tool_events))),
         ("Errors", str(len(errors))),
         ("Usage", usage_text),
@@ -232,6 +234,27 @@ def _render_bts_run(snap: RunSnapshot) -> None:
         ),
         unsafe_allow_html=True,
     )
+    metrics = snap.agent_metrics()
+    if any(m["llm_calls"] or m["tool_calls"] for m in metrics.values()):
+        st.markdown("**Per-agent efficiency (measured from events)**")
+        st.dataframe(
+            [
+                {
+                    "Agent": agent,
+                    "LLM calls": int(m["llm_calls"]),
+                    "Tokens": int(m["total_tokens"]) or "unavailable",
+                    "Tool calls": int(m["tool_calls"]),
+                    "Executed": int(m["executed"]),
+                    "Cache hits": int(m["cache_hits"]),
+                    "Refused (budget)": int(m["refused_budget"]),
+                    "Errors": int(m["tool_errors"]),
+                    "Task seconds": m["seconds"],
+                }
+                for agent, m in metrics.items()
+            ],
+            hide_index=True,
+            width="stretch",
+        )
     if tool_events:
         st.markdown("**Tool calls**")
         st.dataframe(
@@ -377,6 +400,13 @@ def _handle_submit(mode: ResearchMode, fields: Fields, notices: list[tuple[str, 
         )
         return
     manager = get_manager()
+    reusable = manager.find_reusable(research_input)
+    if reusable is not None:
+        # explicit reuse: show the completed result; a new run needs a deliberate click
+        st.session_state[SESSION_RUN_KEY] = reusable
+        st.session_state[REUSE_KEY] = research_input.model_dump(mode="json")
+        return
+    st.session_state.pop(REUSE_KEY, None)
     missing = manager.settings().missing()
     if missing:
         notices.append(("error", "Missing configuration: " + ", ".join(missing)))
@@ -387,6 +417,23 @@ def _handle_submit(mode: ResearchMode, fields: Fields, notices: list[tuple[str, 
         return
     st.session_state[SESSION_RUN_KEY] = run.paths.run_id
     st.rerun()  # re-render the input panel in its running state (Run disabled, Cancel shown)
+
+
+def _render_reuse_prompt(manager: RunManager, active: bool) -> None:
+    """Shown while the last submit matched a completed run: no API calls were made."""
+    pending = st.session_state.get(REUSE_KEY)
+    if not pending or active:
+        return
+    st.info(
+        "An identical research run has already completed, so its results are shown below "
+        "and no new model or search calls were made."
+    )
+    if st.button("Run again (uses new API calls)", key="run_again"):
+        st.session_state.pop(REUSE_KEY, None)
+        run = manager.start(ResearchInput.model_validate(pending))
+        if run is not None:
+            st.session_state[SESSION_RUN_KEY] = run.paths.run_id
+        st.rerun()
 
 
 def render() -> None:
@@ -405,6 +452,7 @@ def render() -> None:
     with center:
         for level, message in notices:
             getattr(st, level)(message)
+        _render_reuse_prompt(manager, active_run is not None)
         _live_workflow(run_id, mode)
         snap = manager.snapshot(run_id) if run_id else None
         if snap is not None and not snap.active:

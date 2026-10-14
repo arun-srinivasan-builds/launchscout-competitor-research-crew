@@ -116,6 +116,7 @@ class Usage(BaseModel):
     serper_calls: int | None = None
     scrape_calls: int | None = None
     cache_hits: int | None = None
+    llm_calls: int | None = None
 
 
 class RunMetadata(BaseModel):

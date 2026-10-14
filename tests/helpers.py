@@ -131,12 +131,13 @@ def make_executor(
                 query = "millet lunch box Coimbatore"
                 c.emit("tool_started", f"search_the_web: {query}", role, tool="search_the_web",
                        arg=query)
-                run.ctx.search(query)
+                scope = "market" if task == TASK_RESEARCH else "reviews"
+                run.ctx.search(query, scope)
                 c.emit("tool_finished", "search_the_web finished", role, status="ok",
                        tool="search_the_web")
                 c.emit("tool_started", "read_web_page: https://millet-kitchen.example/menu", role,
                        tool="read_web_page", arg="https://millet-kitchen.example/menu")
-                run.ctx.read("https://millet-kitchen.example/menu")
+                run.ctx.read("https://millet-kitchen.example/menu", scope)
             if task == TASK_REPORT and not skip_report:
                 run.ctx.write_report(REPORT_MD)
             if gate is not None:
@@ -146,6 +147,8 @@ def make_executor(
             if run.ctx.cancel_event.is_set():
                 return
             c.add_usage({"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120})
+            c.emit("llm_completed", "Model call completed", role, status="ok",
+                   prompt_tokens=100, completion_tokens=20, total_tokens=120)
             run.record_output(task, payloads[task])
             c.emit("task_completed", f"Task complete: {task}", role, task, status="ok")
             if fail_after == task:

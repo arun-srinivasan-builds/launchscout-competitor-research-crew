@@ -44,6 +44,13 @@ class ToolCancelled(RuntimeError):
     """Raised internally when the run was cancelled; surfaced to agents as plain text."""
 
 
+_SCOPE_ROLES = {
+    "market": "Market Researcher",
+    "reviews": "Review Analyst",
+    "writer": "Report Writer",
+}
+
+
 class ToolContext:
     """Per-run shared state for all tools: caps, cache, counters, ledger, cancel flag."""
 
@@ -71,6 +78,7 @@ class ToolContext:
         self.write_calls = 0
         self.cache_hits = 0
         self.tool_errors = 0
+        self.invocations = 0
         self._scope_search: dict[str, int] = {}
         self._scope_read: dict[str, int] = {}
         self._cache: dict[str, str] = {}
@@ -82,6 +90,27 @@ class ToolContext:
     # -- helpers ---------------------------------------------------------------------------
     def _note(self, summary: str, status: str = "info", **data: str | int | bool | None) -> None:
         self.collector.emit("tool_note", summary, status=status, **data)
+
+    def _outcome(
+        self,
+        tool: str,
+        outcome: str,
+        scope: str,
+        arg: str = "",
+        started: float | None = None,
+    ) -> None:
+        """One measured line per tool call: executed / cache_hit / refused_budget / error."""
+        ms = int((time.monotonic() - started) * 1000) if started is not None else None
+        self.collector.emit(
+            "tool_note",
+            f"{tool}: {outcome}",
+            agent=_SCOPE_ROLES.get(scope),
+            status="error" if outcome in ("refused_budget", "error") else "info",
+            tool=tool,
+            outcome=outcome,
+            arg=arg[:120],
+            ms=ms,
+        )
 
     def _retrying(self, fn: Callable[[], Any], what: str, retries: int | None = None) -> Any:
         attempts = (self.limits.tool_retries if retries is None else retries) + 1
@@ -103,6 +132,8 @@ class ToolContext:
     # -- search ----------------------------------------------------------------------------
     def search(self, query: str, scope: str = "") -> str:
         query = " ".join(query.split())[:300]
+        with self.lock:
+            self.invocations += 1
         if self.cancel_event.is_set():
             return "RUN CANCELLED: no further tool calls are allowed. Finish with what you have."
         key = f"search:{query.casefold()}"
@@ -124,14 +155,15 @@ class ToolContext:
                     self.search_calls += 1
                     self._scope_search[scope] = used + 1
         if hit:
-            self._note("Search served from cache", cache_hit=True)
+            self._outcome("search_the_web", "cache_hit", scope, query)
             return cached
         if over:
-            self._note("Search budget reached for this agent or run", "error")
+            self._outcome("search_the_web", "refused_budget", scope, query)
             return (
                 f"SEARCH LIMIT REACHED (budget: {self.limits.searches_per_agent} per agent). "
                 "Do not search again; use the evidence you already have and mark unknowns."
             )
+        began = time.monotonic()
         try:
             results = self._retrying(
                 lambda: self._search_impl(query, self.limits.search_results), "Search"
@@ -139,7 +171,9 @@ class ToolContext:
         except ToolCancelled:
             return "RUN CANCELLED: no further tool calls are allowed. Finish with what you have."
         except RuntimeError as exc:
+            self._outcome("search_the_web", "error", scope, query, began)
             return f"SEARCH ERROR: {exc}. Treat this query as unanswered."
+        self._outcome("search_the_web", "executed", scope, query, began)
         lines: list[str] = []
         for index, item in enumerate(results, start=1):
             link = str(item.get("link", "")).strip()
@@ -170,9 +204,12 @@ class ToolContext:
     # -- read page -------------------------------------------------------------------------
     def read(self, url: str, scope: str = "") -> str:
         url = url.strip()
+        with self.lock:
+            self.invocations += 1
         if self.cancel_event.is_set():
             return "RUN CANCELLED: no further tool calls are allowed. Finish with what you have."
         if not url.lower().startswith(("http://", "https://")):
+            self._outcome("read_web_page", "error", scope, url)
             return "READ ERROR: only public http(s) URLs can be read."
         key = f"read:{normalize_url(url)}"
         with self.lock:
@@ -191,24 +228,27 @@ class ToolContext:
                     self.scrape_calls += 1
                     self._scope_read[scope] = used + 1
         if hit:
-            self._note("Page read served from cache", cache_hit=True)
+            self._outcome("read_web_page", "cache_hit", scope, url)
             return cached
         if over:
-            self._note("Page-read budget reached for this agent or run", "error")
+            self._outcome("read_web_page", "refused_budget", scope, url)
             return (
                 f"PAGE READ LIMIT REACHED (budget: {self.limits.scrapes_per_agent} per agent). "
                 "Do not read more pages; mark unverified items as unknown."
             )
+        began = time.monotonic()
         try:
             # Blocked or missing pages rarely succeed on retry; do not spend extra requests.
             raw = self._retrying(lambda: self._scrape_impl(url), "Page read", retries=0)
         except ToolCancelled:
             return "RUN CANCELLED: no further tool calls are allowed. Finish with what you have."
         except RuntimeError as exc:
+            self._outcome("read_web_page", "error", scope, url, began)
             self.ledger.add(
                 EvidenceEntry(url=url, kind="scraped", status="error", accessed_on=self.today)
             )
             return f"READ ERROR: {exc}. This page could not be verified."
+        self._outcome("read_web_page", "executed", scope, url, began)
         text = " ".join(str(raw).split())[: self.limits.scrape_max_chars]
         self.ledger.add(
             EvidenceEntry(
@@ -226,6 +266,8 @@ class ToolContext:
 
     # -- write report ----------------------------------------------------------------------
     def write_report(self, content: str) -> str:
+        with self.lock:
+            self.invocations += 1
         if self.cancel_event.is_set():
             return "RUN CANCELLED: report not written."
         if not content.strip():
