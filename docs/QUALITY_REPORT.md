@@ -97,3 +97,9 @@ Layout is deterministic and evidence-grounded; visuals show missing evidence as 
 
 ### Workflow visualization (post-M6)
 Connector motion is a pure function of recorded state (see `active_links`); idle, finished, cancelled and failed workflows have none. In sequential mode a link stays lit while the receiving specialist is active; that shows the recorded handoff, not a message. Limits: the HTML (and therefore the animation) restarts only when a new recorded event changes the canvas, not on every 1.5 s poll; delegation summaries are truncated at record time (~100 characters); the Manager still lists its own `write_report_file` call as a Manager tool call because CrewAI runs the task with the task's tools; replay steps through every recorded event (126 for L6), so the accelerated play takes about 75 s.
+
+### M7 change tracking
+Pure comparison of saved snapshots; findings describe research output, not the market. Known limits: offering and subscription differences are text comparisons of research summaries, so rewording by a different run appears as a change (stated in the limitations, and an evidence-only difference is "needs review"); competitor matching uses names and non-generic hosts, so a renamed competitor appears as one absent plus one new; only the fields stored in `competitors.json` are compared (no report prose); the L5/L6 pair is the only same-scope saved pair and was produced hours apart, so no real market change can be inferred from it.
+
+### M7 classification correction
+Wording differences between research runs are never counted as changed competitors: the "Changed" KPI requires a verified price change on comparable evidence. Regression tests cover synthetic wording noise, wording noise next to a genuine price change, the UI KPI, and the real L5 vs L6 pair (0 changed, 2 needs review). This corrects the earlier statement that L5/L6 showed two changed competitors.

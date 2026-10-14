@@ -439,3 +439,13 @@ None.
 - `ui/research_tab.py`: replay of any finished or saved run: Restart, Step back, Play/Pause, Step forward; defaults to the final saved state; one recorded event per 0.6 s tick, labelled as accelerated visualization; shows the current recorded event line. Replay only reads saved events: no manager.start, no crew, no LLM, no search.
 - Browser check (headless Edge, L6): all four delegations visible; during play connectors lit in recorded order (delegate-1, flow-1-2, delegate-2...), animation names present, emulated reduced motion gave no animation with the highlight kept. Screenshot: shots/replay_live.png.
 - Tests: tests/test_workflow_motion.py (13) plus existing suites: 300 passed, Ruff clean. API calls made: none.
+
+## M7 Lightweight competitor change tracking (uncommitted)
+- Deterministic, offline comparison of two saved runs of the same scope. New: `launchscout/tracking.py`, `tests/test_tracking.py`; Weekly Tracking tab now hosts the comparison (still exactly three tabs; the scheduler card and the disabled "Rerun now" are unchanged). No LLM, search, scrape, CrewAI or paid API call; no research started.
+- Rules: verified price change only for two complete, evidence-backed prices with the same currency, unit and pack size; otherwise "Price verification changed" or "Insufficient evidence". Absent competitor = "Not observed in latest run", never "closed". Evidence differences are labelled coverage notes (inconclusive). Partial/legacy runs are compared with explicit limitations.
+- Real saved data: the only same-scope pair is L5 vs L6 (same idea, six hours apart, different modes). It is eligible and shows wording-level differences with the limitation that they reflect research variance. No synthetic change is shown in the app; synthetic fixtures exist only in tests and are labelled.
+- Tests: 325 pass, Ruff clean.
+
+### M7 classification correction
+- Text differences in research descriptions (offering, subscription, channels) and evidence coverage are now "Needs review" with the label "Research description differs — real-world change not verified"; both original descriptions stay visible. Only a verified, comparable, evidence-backed price difference counts as "Changed". New / not-observed classifications, scope checks, evidence rules and the Markdown export are unchanged.
+- Saved L5 vs L6 (offline): eligible; KPIs: newly observed 0, not observed 0, changed 0, needs review 2 (both competitors), unchanged 0. Tests: 329 pass, Ruff clean.

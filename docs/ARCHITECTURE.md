@@ -70,3 +70,6 @@ saved run files -> `deck.load_deck_source` -> `deck_prompt` (facts only) -> Pitc
 
 ### Workflow motion and replay
 `progress.reduce_events` -> `AgentState` (incl. `delegations`, `delegated`) -> `progress.active_links` -> `ui.workflow.render_workflow_html(..., links)` (adds `ls-live`). Replay: `progress.replay_states(events[:N])` driven by session state in `ui/research_tab.py`; read-only on saved events.
+
+## Competitor change tracking (M7)
+`load_saved_snapshot` (existing, read-only) -> `tracking.compare_snapshots(baseline, latest)` -> `Comparison` (eligibility reasons, per-competitor rows, limitations) -> `ui/weekly_tab.py` (selectors, KPI metrics, table, expanders, Markdown download via `tracking.to_markdown`). No new data model on disk, agent, database or service; no model, search, scrape or CrewAI import. Scope key = normalised idea + city + target customer (known competitors and mode ignored). Competitors match by normalised name or a non-generic host.
