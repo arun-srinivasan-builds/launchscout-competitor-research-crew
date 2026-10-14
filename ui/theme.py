@@ -223,6 +223,9 @@ div[data-testid="stCaptionContainer"], div[data-testid="stCaptionContainer"] p {
 .ls-manager-node .ls-node-name { min-height: 0; }
 .ls-node-status { font-size: .95rem; font-weight: 600; color: var(--ls-accent); }
 .ls-st-idle .ls-node-status { color: var(--ls-muted); }
+.ls-st-failed .ls-node-status { color: #F87171; }
+.ls-st-cancelled .ls-node-status { color: var(--ls-warn); }
+.ls-st-active .ls-node { box-shadow: 0 0 26px var(--ls-glow); }
 .ls-node-num {
   position: absolute; top: -.5rem; right: -.5rem; width: 1.3rem; height: 1.3rem; border-radius: 50%;
   display: grid; place-items: center; font-size: .75rem; font-weight: 700; color: var(--ls-base);
@@ -258,7 +261,7 @@ div[data-testid="stCaptionContainer"], div[data-testid="stCaptionContainer"] p {
 .ls-chip-warn { color: var(--ls-warn); border-color: var(--ls-warn); background: rgba(251, 191, 36, 0.12); }
 .ls-panel-text { font-size: .95rem; line-height: 1.45; color: var(--ls-text); }
 .ls-events { list-style: none; margin: 0; padding: 0; font-size: .92rem; color: var(--ls-text); }
-.ls-events li { margin: .1rem 0; }
+div[data-testid="stMarkdownContainer"] .ls-events li { margin: .15rem 0; font-size: .84rem; line-height: 1.35; }
 .ls-none { color: var(--ls-muted); }
 .ls-handoff {
   margin-top: auto; display: flex; align-items: center; gap: .55rem; padding: .55rem .7rem;

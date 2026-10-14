@@ -31,7 +31,7 @@ No breaks were reported for this window and none are assumed.
 | 5 | M2 authorization and preflight (PRP boxes, `.gitignore`, ignore verification, log update) | 14 Oct 2026 | 11:00:25 AM | system-clock | not provided | — | First clock reading after authorization; user-confirmed planning window ended 10:56 AM |
 | 6 | M2 implementation (scaffold, config, schemas, validation, run dirs, three-tab UI, tests) | 14 Oct 2026 | after 11:00:25 AM (exact start not recorded) | system-clock bound | 11:07:16 AM (final gate run completed) | system-clock | Core gate passed ~11:04 (Streamlit server log line 11:04:32); UI confirmation change applied afterwards; final gate 11:07:16 |
 | 7 | M2 documentation and commits | 14 Oct 2026 | after 11:07:16 AM | system-clock bound | not provided | — | Commit times recorded in git log, not duplicated here |
-| 8 | Pre-M3 verification (venv relocation, keys, model list, model_check) | 14 Oct 2026 | not recorded | — | not recorded | — | Ran after relocation to `D:gentic-coding-labs`; no code changes |
+| 8 | Pre-M3 verification (venv relocation, keys, model list, model_check) | 14 Oct 2026 | not recorded | — | not recorded | — | Ran after relocation to `D:\agentic-coding-labs`; no code changes |
 | 9 | M2 UI refinement cycle (width/typography; dark workflow design from approved reference; two-panel layout; alignment corrections) | 14 Oct 2026 | not recorded (earliest system-clock reading in this phase: 11:37:46 AM) | system-clock bound | 12:24 PM (final gate) | — | Exact start/end per sub-step not recorded; final gate and this commit read from system clock at 12:24:05 PM |
 
 ## Milestone status
@@ -40,7 +40,8 @@ No breaks were reported for this window and none are assumed.
 |---|---|---|---|---|
 | M1 Requirements/repository assessment + PRP | Complete; PRP v1.1 approved by user | 10:20 AM (user-confirmed) | 10:56 AM (user-confirmed, planning window end) | none |
 | M2 Scaffold, configuration and approved UI | Complete; UI visually approved by user; ruff clean, 51 tests, smoke 200; live `gpt-6-luna` call verified | after 11:00:25 AM | final gate 12:24 PM (system-clock) | see git log |
-| M3–M8 | Not authorized | — | — | none |
+| M3 Real sequential CrewAI execution | Implemented; live runs L1-L4 executed; awaiting user acceptance review (uncommitted) | not recorded | not recorded | none yet |
+| M4–M8 | Not authorized | — | — | none |
 
 ## Breaks and pauses
 None reported by the user.
@@ -100,17 +101,55 @@ None reported by the user.
 ## M2 UI design (frozen)
 Dark navy/steel-blue/teal theme; left control card (about 25% width) and central Live Agent Workflow canvas (about 72%); four connected agent nodes with truthful Idle states; Manager placeholder in Hierarchical mode (M5); results and Behind the Scenes beneath the canvas; stacked below 960 px. No redesign unless a functional issue requires it.
 
-## Requirements carried into M3 (not started)
-1. Real CrewAI events drive the workflow (task/agent status, tool calls, failures); nothing simulated.
-2. Live updates during execution (polling fragment or equivalent), input panel never hidden.
-3. Crew runs in a background thread/process, not inside the Streamlit script, so widget edits cannot interrupt it.
-4. Prevent duplicate runs (disable Run while active; guard against double submit and reruns).
-5. Persist session state (run id, status, events) across Streamlit reruns and page refresh where feasible.
-6. The `AgentState` model in `ui/workflow.py` is the intended render contract.
+## M3 - Real sequential CrewAI execution (implemented; awaiting acceptance review)
+
+Authorized by the user on 14 Oct 2026 (M3 only). Times are system-clock readings (IST).
+
+| Item | Detail |
+|---|---|
+| Pre-M3 | Old working-directory path corrected in `INITIAL.md` (1) and the PRP (2) by exact-string replacement only; user edits preserved. Recreated `.venv` verified (Python 3.11.9; launchers `pytest.exe`, `streamlit.exe`, `ruff.exe`, `crewai.exe` run). `MODEL_NAME=gpt-6-luna` and key presence confirmed by name; live model call verified earlier |
+| Modules | `launchscout/{tools,agents,tasks,crew,events,progress,evidence,grounding,runner}.py`; UI wired in `ui/research_tab.py`; `ui/workflow.py` consumes `AgentState` from `launchscout/progress.py` |
+| Agents | Four CrewAI agents (Market Researcher, Review Analyst, Strategy Analyst, Report Writer); strategist has no tools; no delegation; `max_iter` 8, 420 s agent timeout |
+| Tools | Guarded wrappers over `SerperDevTool`, `ScrapeWebsiteTool`, `FileWriterTool`: per-agent budgets (6 searches / 5 page reads), run totals (12 / 10), identical-call cache, bounded retry (search 1, reads 0), untrusted-content envelope, cancel awareness, evidence ledger |
+| Execution | Daemon worker thread owned by a process-wide `RunManager`; one active run; Streamlit polls via `st.fragment(run_every=1.5)`; run state mirrored to `runs/<id>/` |
+| States | complete / partial / failed / cancelled / timeout (run limit 1200 s); acceptance is `not_evaluated` (validation is M4) |
+| Guardrails | Prompts; ledger grounding downgrades price/evidence/source claims the tools never returned (tagged, not dropped); report URLs not in ledger flagged; untrusted-content envelope |
+| Not implemented (by scope) | Acceptance gate and report validators, PDF/Markdown export, hierarchical Manager, deck, weekly (M4-M8) |
+
+### M3 live verification (real credentials; real Serper and OpenAI calls)
+
+| # | Run | Result | Measured usage |
+|---|---|---|---|
+| L0 | Accidental: first M3 pytest run started a live run because an existing UI test clicked Run with real keys and no stub; interpreter exit ended it | 5 searches and 5 page-read attempts issued, 2 model calls, no completion; directory deleted | not recorded (run killed; metadata unfinished) |
+| L1 | Driven in Edge via DevTools: filled the form, clicked Run Research | complete in 1m46s; 4/4 tasks; UI updated live (Idle, Active, tool labels, Complete); Review Analyst produced 0 findings because the shared page-read budget was exhausted by the Market Researcher | 74,401 tokens (67,377 + 7,024); 12 Serper, 10 page reads |
+| L2 | Same input after per-agent budgets | complete in 1m35s; 10 review findings (6 with ledger-verified sources); 5 competitors, 1 verified price, 4 unknown; 0 grounding issues; 0 report URLs outside the ledger | 53,462 tokens (46,019 + 7,443); 11 Serper, 8 page reads |
+| L3 | Cancel clicked at ~25 s, before the callback-based stop existed | status cancelled, but agents still ran all 4 tasks to completion (cancel only blocked tools): defect | 39,797 tokens; 6 Serper, 5 page reads |
+| L4 | Cancel clicked at ~20 s after the callback stop | cancelled ~18 s after the click (waited for the in-flight step); Market Researcher Cancelled, others Not started | 17,475 tokens; 6 Serper, 5 page reads |
+
+Total measured across L1-L4: 185,135 tokens, 35 Serper searches, 28 page reads (plus unmeasured L0). Content observations (not acceptance): all competitor URLs came from tool results; most prices were left `unknown`, the intended behaviour when pages do not state a price.
+
+### M3 defects and rework (actual)
+
+| # | Defect | Fix |
+|---|---|---|
+| 1 | Stray bell character (0x07) written into the path in `INITIAL.md`, the PRP and this log by a shell-escaping slip | Located by byte search and repaired; files verified |
+| 2 | Test suite could start live billable runs | `tests/conftest.py` autouse stub manager, `LAUNCHSCOUT_NO_LIVE` guard in tools and executor, runs redirected to tmp |
+| 3 | Agent role missing on task/agent start events; tool labels did not match CrewAI snake_case tool names | Role fallback (agent object, task name); normalised label lookup |
+| 4 | CrewAI console emoji raised `charmap` handler errors on Windows | stdout/stderr reconfigured to UTF-8 with replace |
+| 5 | Shared tool budget starved the Review Analyst (L1) | Per-agent budgets with run totals |
+| 6 | Cancel only blocked tools; crew kept running (L3) | `step_callback` and task callbacks raise `RunCancelled`; reducer maps post-cancel errors to Cancelled |
+| 7 | Budget messages quoted totals when the per-agent cap triggered | Messages reworded |
+| 8 | Event list font inherited the global list size and made cards tall | Scoped CSS for `.ls-events li` |
+| 9 | Test assumption wrong: identical queries are cache hits, not two Serper calls | Test corrected (1 call, 2 cache hits) |
+
+Rework cycles: 3 (budgets, cancellation, test isolation). Known limits: cancel/timeout are cooperative and wait for the in-flight model or tool call; page-read prices are not machine-checked against page text (M4 validators); a restarted server does not auto-display previous runs (artifacts remain in `runs/`; `snapshot_from_disk` restores them programmatically); Streamlit reload of changed `launchscout` modules resets the in-process manager (development only).
+
+## Requirements carried into M4+ (unchanged)
+- Acceptance gate, report validators and link checks, `-PARTIAL` naming, PDF/Markdown export (M4).
+- Hierarchical Manager delegation using the same `AgentState` contract (M5).
 
 ## Open items
-- `INITIAL.md` has uncommitted user edits and stale working-directory paths in it and the PRP; left untouched.
-- Venv console-script launchers and activate scripts still embed the pre-relocation path (python -m works).
+- `INITIAL.md` still has uncommitted user edits (path corrected only).
 
 ## Proposed, not approved
 None.

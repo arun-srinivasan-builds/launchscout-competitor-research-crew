@@ -28,6 +28,23 @@ def _clean(value: str | None) -> str | None:
     return value
 
 
+class RunLimits(BaseModel):
+    """Bounded-execution limits (PRP guardrail G5). Defaults are deliberately conservative."""
+
+    max_searches: int = 12
+    max_scrapes: int = 10
+    # Per-agent share of the totals above, so one researcher cannot starve the other.
+    searches_per_agent: int = 6
+    scrapes_per_agent: int = 5
+    search_results: int = 6
+    scrape_max_chars: int = 6000
+    agent_max_iter: int = 8
+    agent_timeout_s: int = 420
+    tool_retries: int = 1
+    run_timeout_s: int = 1200
+    cancel_grace_s: int = 60
+
+
 class Settings(BaseModel):
     """Runtime settings. Secret fields use SecretStr so repr/str never reveal values."""
 

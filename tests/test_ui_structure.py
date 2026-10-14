@@ -57,18 +57,6 @@ def test_validation_errors_displayed():
     assert not at.exception
 
 
-def test_valid_submission_makes_no_run_and_says_so():
-    at = _app()
-    research = at.tabs[0]
-    research.text_input[0].set_value("Healthy millet meal boxes delivered for lunch")
-    research.text_input[1].set_value("Coimbatore")
-    research.text_input[2].set_value("office workers aged 25-40")
-    at.tabs[0].button[0].click().run()
-    assert not at.error
-    assert any("not part of this build" in i.value for i in at.info)
-    assert not (ROOT / "runs").exists()
-
-
 def test_workflow_area_is_idle_and_not_simulated():
     at = _app()
     text = _all_markdown(at)

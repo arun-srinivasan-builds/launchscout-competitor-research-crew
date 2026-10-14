@@ -124,7 +124,10 @@ class RunMetadata(BaseModel):
     model_name: str | None = None
     started_at: datetime
     finished_at: datetime | None = None
-    status: Literal["created", "running", "complete", "partial", "failed"] = "created"
+    status: Literal[
+        "created", "running", "complete", "partial", "failed", "cancelled", "timeout"
+    ] = "created"
+    error: str | None = None
     acceptance: Acceptance = Field(default_factory=Acceptance)
     usage: Usage = Field(default_factory=Usage)
 

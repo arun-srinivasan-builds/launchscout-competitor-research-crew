@@ -1,8 +1,8 @@
 """Live Agent Workflow: markup for the four connected agent nodes (CSS lives in ui/theme.py).
 
-M2 renders every node as Idle. The renderer already accepts per-agent `AgentState` so M3 can
-pass real CrewAI event data (status, task, tool calls, measured progress) without changing the
-markup. Nothing here simulates execution: states default to Idle with no events.
+Each node renders an `AgentState` derived from recorded run events (see
+`launchscout/progress.py`). With no run, every node is Idle with no events; nothing here
+simulates execution.
 """
 
 from __future__ import annotations
@@ -10,16 +10,11 @@ from __future__ import annotations
 import html
 from collections.abc import Mapping
 from dataclasses import dataclass
-from enum import StrEnum
 
+from launchscout.progress import AgentState, AgentStatus
 from launchscout.schemas import ResearchMode
 
-
-class AgentStatus(StrEnum):
-    IDLE = "Idle"
-    ACTIVE = "Active"
-    COMPLETE = "Complete"
-    FAILED = "Failed"
+__all__ = ["AGENTS", "AgentState", "AgentStatus", "render_workflow_html"]
 
 
 @dataclass(frozen=True)
@@ -30,17 +25,6 @@ class AgentNode:
     tools: tuple[str, ...]
     handoff: str
     glyph: str
-
-
-@dataclass(frozen=True)
-class AgentState:
-    """Runtime state for one node. Defaults are the truthful pre-run state."""
-
-    status: AgentStatus = AgentStatus.IDLE
-    task_label: str = "Awaiting run"
-    progress_percent: int | None = None  # None = no measured progress
-    events: tuple[str, ...] = ()
-    tool_calls: tuple[str, ...] = ()
 
 
 AGENTS: tuple[AgentNode, ...] = (
@@ -71,6 +55,7 @@ _STATUS_CLASS = {
     AgentStatus.ACTIVE: "ls-st-active",
     AgentStatus.COMPLETE: "ls-st-complete",
     AgentStatus.FAILED: "ls-st-failed",
+    AgentStatus.CANCELLED: "ls-st-cancelled",
 }
 
 
@@ -124,6 +109,7 @@ def _card(index: int, node: AgentNode, state: AgentState) -> str:
 def render_workflow_html(
     mode: ResearchMode,
     states: Mapping[str, AgentState] | None = None,
+    status_text: str = "All agents idle. No run has been executed.",
 ) -> str:
     """Return the connected-node canvas as one HTML string (no blank lines, no indentation)."""
     states = states or {}
@@ -150,7 +136,7 @@ def render_workflow_html(
     mode_label = "Hierarchical" if mode is ResearchMode.HIERARCHICAL else "Sequential"
     parts.append(
         '<div class="ls-statusbar"><span><span class="ls-dot"></span>'
-        "All agents idle. No run has been executed.</span>"
+        f"{_esc(status_text)}</span>"
         f"<span>Mode: {mode_label}</span></div></div>"
     )
     return "".join(parts)

@@ -3,18 +3,18 @@
 > Source of truth: `PRPs/launchscout-prp.md` section 10. Status values: `Not started`, `Partial`, `Done`, `Blocked`.
 > Rows sourced from `INITIAL.md` carry the caveat **unverified vs original assignment text** (TD-3).
 
-## Status after M2 (14 Oct 2026)
+## Status after M3 (14 Oct 2026, awaiting acceptance review)
 
 | Req | Requirement | Implementation | Test evidence | Status |
 |---|---|---|---|---|
 | F-01 | Input fields + validation | `launchscout/inputs.py`, `ui/research_tab.py` | `tests/test_inputs.py` (7), `tests/test_ui_structure.py::test_validation_errors_displayed` | **Done** |
 | F-02 | Sample + alternate input, no code change | same | `test_inputs.py::test_sample_and_alt_inputs` (validation only); live runs not executed | Partial (live runs M3/M8) |
 | F-03 | Env/keys by name only | `launchscout/config.py` | `tests/test_config.py` (6) | **Done** |
-| A-01..A-04 | Agents, tasks, sequential process | — | — | Not started (M3) |
-| P-01, P-02 | Progress, Behind the Scenes | — | — | Not started (M3) |
+| A-01..A-04 | Agents, tasks, sequential process | `launchscout/agents.py`, `tasks.py`, `crew.py` | `tests/test_crew_structure.py`; live runs L1-L4 | **Done (M3)** |
+| P-01, P-02 | Progress, Behind the Scenes | `launchscout/events.py`, `progress.py`, `runner.py`, `ui/research_tab.py` | `test_events.py`, `test_runner.py`, `test_ui_run.py`; live runs | **Done (M3)**; validation results arrive in M4 |
 | R-01..R-06 | Report, exports, downloads | — | — | Not started (M4) |
 | R-07 | Run-specific directories | `launchscout/runs.py` | `tests/test_runs.py` (4) | Partial (report/export use in M4) |
-| G-01..G-04, G-06 | Acceptance gate, evidence validation, tools | — | — | Not started (M3/M4) |
+| G-01..G-04, G-06 | Acceptance gate, evidence validation, tools | `tools.py`, `evidence.py`, `grounding.py` | `test_tools.py`, `test_grounding.py` | Partial: caps, cache, injection envelope and ledger grounding done (M3); acceptance gate and report validators M4 |
 | G-05 | Secrets excluded | `.gitignore`, `.env.example`, `launchscout/logging_utils.py` | `tests/test_secrets.py` (5), `tests/test_config.py` | **Done** |
 | PR-01 | Partial-report behaviour | — | — | Not started (M4) |
 | SA-01 | Hierarchical + Manager | — | — | Not started (M5) |
@@ -30,4 +30,4 @@
 Counts: Done 4 · Partial 6 · Not started remainder · Blocked: live gates (TD-1, TD-2).
 
 ## Acceptance criteria (INITIAL.md section 10)
-None marked complete. No live verification has been performed.
+Not marked complete. Live runs L1-L4 (see `BUILD_LOG.md`) exercised the sequential crew; acceptance validation and exports are M4.
