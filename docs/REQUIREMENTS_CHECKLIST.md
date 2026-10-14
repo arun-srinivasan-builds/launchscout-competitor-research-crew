@@ -48,3 +48,17 @@ Counts: Done 4 · Partial 6 · Not started remainder · Blocked: live gates (TD-
 Not marked complete. Live runs L1-L4 (see `BUILD_LOG.md`) exercised the sequential crew; acceptance validation and exports are M4.
 
 - SA-02/SA-03 live check: executed once as L6 (hierarchical delegation worked, 4 delegations, all tasks completed, limits respected); research acceptance still not met in either mode.
+
+## M6 Pitch Deck (Stretch B) - offline status
+| ID | Requirement | Evidence | Status |
+|---|---|---|---|
+| SB-01 | Dedicated Pitch Deck agent, no tools, reuses saved research | `tests/test_deck.py::test_agent_has_no_tools_and_no_delegation`, `::test_generate_uses_one_agent_call_and_exports_editable_pptx` | Offline pass; live not run |
+| SB-02 | Exactly six slides, fixed titles | `::test_parse_accepts_fenced_json_and_rejects_wrong_slide_count`, `::test_wrong_title_is_a_violation` | Offline pass |
+| SB-03 | Editable native PPTX (no pictures) | `::test_generate_uses_one_agent_call_and_exports_editable_pptx` | Offline pass |
+| SB-04 | Claims grounded; prices/URLs/stats/names/years checked; violations block export | `::test_deck_blocks_*`, `::test_violations_block_export_but_keep_spec_and_meta` | Offline pass |
+| SB-05 | Unknown prices, recommendations, assumptions, partial evidence labelled | `::test_labels_mark_*` | Offline pass |
+| SB-06 | No automatic research rerun; no model call on view/download | `::test_tab_uses_saved_run_without_model_calls_until_clicked`, `::test_generation_does_not_touch_research_files` | Offline pass |
+| SB-07 | Live deck generation from a real saved run | not executed (needs approval) | Not yet measured |
+
+| SB-08 | Multiline label banners stay inside their highlight and above the footer | `tests/test_deck.py::test_multiline_warning_banner_grows_to_contain_its_text`, `::test_short_labels_keep_a_compact_banner`, `::test_bounds_check_flags_a_banner_too_small_for_its_text` | Offline pass; visual re-check pending |
+| SB-01..SB-06 | Live check L6 deck | 1 call, 4,486 tokens, claim check 0 violations after rule correction, PPTX 6 slides | Executed; time unavailable |

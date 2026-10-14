@@ -82,3 +82,12 @@ Not applicable in M2 (no research executed). Verified source coverage: n/a. Unsu
 
 ## M5 live hierarchical result (L6)
 Hierarchical run reached the same acceptance outcome as sequential L5 (partial_failed_acceptance; 2 competitors, 0 verified prices) with 18 vs 13 model calls, +9.2% tokens, 178 s vs 108 s, and an extra R7 failure. Single run; no variance claim. See M5_HIERARCHICAL_LIVE_TEST_PLAN.md.
+
+## M6 Pitch Deck (offline)
+Deck claim check is deterministic and covers URLs, currency amounts, statistics, competitor names and years. Known limits: it cannot judge whether a paraphrased qualitative claim is faithful (only that numbers, names, URLs and prices are grounded); slide layout was not visually inspected (no PowerPoint/LibreOffice available); no live model output has been validated yet.
+
+### M6 live deck outcome (L6 source)
+One live generation (1 call, 4,486 tokens; time unavailable). First claim check blocked slide 6 for "proposed ₹699" (rule too narrow); rule corrected with regression tests and the stored spec revalidated offline: 0 violations, PPTX exported with six editable slides. Structure and labels verified programmatically; text-fit checked only by a heuristic estimate. Visual rendering inspection is still pending and no claim is made that layout is clean.
+
+### M6 closure
+Banner overflow on long recommendation labels fixed and covered by regression tests (`test_multiline_warning_banner_grows_to_contain_its_text`, `test_bounds_check_flags_a_banner_too_small_for_its_text`). Fit is verified by estimate only; the revised deck has not been rendered or visually inspected by me. Live metrics unchanged: 1 call, 4,486 tokens, time unavailable.

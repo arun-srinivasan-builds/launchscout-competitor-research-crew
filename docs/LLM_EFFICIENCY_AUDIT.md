@@ -135,3 +135,6 @@ repeats research; every standard has an automated test.
 Efficiency changes are accepted only if, on the same inputs, they do not reduce: number of
 competitors with evidence URLs, verified-price count, sourced review findings, or report-section
 completeness. Baselines for L2 (complete run): 5 competitors, 1 verified price, 10 findings (6 sourced).
+
+## M6 deck generation
+One model call per explicit "Generate pitch deck" click: a single no-tool agent, input about 9k characters of structured facts (not the full report, no scraped pages), output one JSON object. Viewing, selecting a run, previews and PPTX download make zero calls (tested). Claim check, labels and PPTX rendering are deterministic. Live token count: Not yet measured.

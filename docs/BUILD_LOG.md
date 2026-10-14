@@ -390,3 +390,30 @@ None.
 
 ## M5 live hierarchical test L6 (about 8:15 PM IST (machine clock), uncommitted)
 - Single authorized paid run, identical input to L5, agreed limits (30 calls / 12 Manager / 6 delegations / 12 searches / 10 reads / 12 min) set in `scripts/run_live_hierarchical.py`. Result: complete, partial_failed_acceptance; 18 calls, 75,446 tokens, 12 searches, 9 reads, 4 delegations, 178 s. Details and comparison in `docs/M5_HIERARCHICAL_LIVE_TEST_PLAN.md`. Evidence preserved in `runs/20261014-201109-...-c0fe/` (gitignored). No second run. UI frozen per instruction.
+
+## M6 Editable Pitch Deck generation (offline implementation, uncommitted)
+- M5 committed as 266977d before M6 began. L5 vs L6 comparison recorded in docs/LEARNINGS.md.
+- New: `launchscout/deck.py` (DeckSource loader, facts prompt, Pitch Deck agent with no tools, parsing, deterministic claim check, deterministic labels, persistence under `runs/<id>/deck/`), `launchscout/exports/pptx_builder.py` (python-pptx, native text boxes, real bullets, notes carry sources, dark navy/teal), `ui/deck_tab.py` (saved-run selector, one explicit Generate click, stored-deck preview, claim-check reasons, PPTX download), `SlideSpec.labels`.
+- Decision (differs from PRP 7.1): partial_failed_acceptance reports ARE allowed as deck sources per the M6 instruction, with every slide labelled PARTIAL EVIDENCE; failed_no_report and legacy runs are refused.
+- No paid deck-generation call has been made. Tests: full suite passes, Ruff clean. No renderer (PowerPoint/LibreOffice) is installed here, so slide layout was not visually inspected.
+
+## M6 live deck validation D1 (about 8:28 PM IST, uncommitted)
+- One authorized paid deck generation from saved L6 (`...-c0fe`, partial_failed_acceptance) via `scripts/run_live_deck.py`; no research rerun, no specialists/Manager. Hard guard: second model call would raise. Measured: 1 model call, 4,486 tokens (2,242 prompt / 2,244 completion). Wall time not captured (the driver crashed printing the result on a cp1252 console after saving; the script is fixed, generation was not repeated).
+- Result: six slides with correct titles, sources and labels; claim check raised 1 violation (slide 6, rule `price`): "validate the proposed ₹699 test price". ₹699 is the report's recommended price, but the bullet says "proposed", not "recommended", so the checker blocked the export. No PPTX was produced. Research evidence and spec were not altered.
+- Assessment: probable checker false positive (the rule only accepts the word "recommend"); not changed pending review. Visual rendering validation outstanding (no PowerPoint/LibreOffice; and no PPTX exists to render).
+
+## M6 claim-validation correction (uncommitted)
+- Price rule: "propos*", "suggest*" and "recommend*" now count as recommendation wording only when (a) the amount equals the saved strategy's recommended price, (b) the wording is within 70 characters of the amount, and (c) the slide is not a competitor slide (2, 3). A verified competitor price described with recommendation wording immediately before it is now a violation (new strictness). Unsupported or competitor-unverified amounts are still blocked.
+- Added `deck.revalidate_saved_deck` (offline; keeps original generation record; no model call) and `pptx_builder.check_text_bounds` (heuristic fit estimate, not a render).
+- Applied to saved L6 deck spec: 0 violations, PPTX exported (`launchscout-pitch-deck-PARTIAL.pptx`, 6 slides, 0 pictures, speaker notes with sources on every slide, PARTIAL EVIDENCE label on all slides, unknown-price label on slide 2, recommendation label on slide 5). Text-bounds estimate: no issues. Research files byte-identical before/after. No LLM call, no research rerun.
+- Deck execution time: unavailable (not captured; not estimated). Visual inspection of rendered slides: PENDING (no PowerPoint/LibreOffice here).
+- Tests: 269 pass, Ruff clean.
+
+## M6 final layout correction and closure
+- Defect (found by user review of the generated deck): on slide 5 the long recommendation label wrapped outside its highlighted banner (fixed 0.4 in height).
+- Fix (`exports/pptx_builder.py` only): banner height now derives from the estimated wrapped line count of all labels (with padding and vertical centring); body starts below the banner; footer box height raised from 0.4 to 0.55 in so a wrapped footer stays on the slide. Colours, fonts, sizes, content and editable structure unchanged.
+- `check_text_bounds` now also flags a banner too small for its text, banner/body overlap and banner/footer collision (heuristic estimate, not a render).
+- Rebuilt offline from the saved L6 spec: 0 claim violations, 6 slides, 0 pictures, notes with sources on every slide, banners 0.59 in (0.79 in on slide 5), footers end at 7.35 of 7.5 in. No LLM, no research, research files byte-identical.
+- Metrics preserved: 1 model call, 4,486 tokens (2,242 / 2,244), execution time unavailable.
+- Test fix: `test_real_saved_runs_load_read_only_if_present` failed only because PowerPoint held an Office lock file (`~$...pptx`) in the deck folder; the copy now ignores `~$*`.
+- Tests: 272 pass, Ruff clean. Visual rendering of the revised deck was NOT performed here (no renderer); the user's earlier visual review of the generated deck is what found the defect. The revised file needs a fresh look.

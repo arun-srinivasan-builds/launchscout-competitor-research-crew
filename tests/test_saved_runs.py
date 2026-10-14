@@ -326,7 +326,8 @@ def test_real_saved_runs_load_read_only_if_present(tmp_path):
     """Copies of the developer's actual runs (L1-L5 etc.) replay without changes."""
     real = ROOT / "runs"
     copy = tmp_path / "runs"
-    shutil.copytree(real, copy)
+    # Office lock files (~$*) exist only while a document is open and cannot be copied
+    shutil.copytree(real, copy, ignore=shutil.ignore_patterns("~$*"))
     before = {p.name: _digest(p) for p in copy.iterdir() if p.is_dir()}
     summaries = list_saved_runs(copy)
     assert summaries, "expected readable saved runs"

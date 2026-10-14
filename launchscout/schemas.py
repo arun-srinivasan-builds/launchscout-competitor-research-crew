@@ -138,6 +138,7 @@ class SlideSpec(BaseModel):
     bullets: list[str] = Field(default_factory=list)
     notes: str = ""
     source_refs: list[str] = Field(default_factory=list)
+    labels: list[str] = Field(default_factory=list)  # added by code, never by the model
 
 
 class DeckSpec(BaseModel):
