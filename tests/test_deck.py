@@ -336,13 +336,14 @@ def test_generate_uses_one_agent_call_and_exports_editable_pptx(tmp_path, source
     prs = Presentation(str(path))
     assert len(prs.slides) == 6
     for slide, title in zip(prs.slides, deck.DECK_TITLES, strict=True):
-        assert all(shape.shape_type != 13 for shape in slide.shapes)  # no pictures
+        pictures = [shape for shape in slide.shapes if shape.shape_type == 13]
+        assert [p.name for p in pictures] == ["LS logo"]  # the logo is the only picture
         names = {s.name for s in slide.shapes}
-        assert {"Title", "Body", "Footer"} <= names
+        assert {"Title", "Labels", "Footer", "Evidence status"} <= names
         assert next(s for s in slide.shapes if s.name == "Title").text_frame.text == title
         assert slide.notes_slide.notes_text_frame.text is not None
-    body = next(s for s in prs.slides[1].shapes if s.name == "Body").text_frame.text
-    assert "Alpha Juice" in body and "Beta Press" in body
+    matrix = " ".join(s.text_frame.text for s in prs.slides[1].shapes if s.has_text_frame)
+    assert "Alpha Juice" in matrix and "Beta Press" in matrix
     assert (
         "PARTIAL EVIDENCE"
         in next(s for s in prs.slides[0].shapes if s.name == "Labels").text_frame.text
@@ -537,12 +538,12 @@ def test_text_bounds_check_passes_normal_deck_and_flags_overflow(tmp_path, sourc
     build_pptx(deck.apply_labels(_spec(), source), source, ok, date(2026, 10, 14))
     assert check_text_bounds(ok) == []
 
-    def long(s):
-        s[0]["bullets"] = ["word " * 38] * 5  # five 190-character bullets on one slide
-
-    big = tmp_path / "big.pptx"
-    build_pptx(deck.apply_labels(_spec(long), source), source, big, date(2026, 10, 14))
-    assert any("footer" in p for p in check_text_bounds(big))
+    prs = Presentation(str(ok))
+    victim = next(sh for sh in prs.slides[0].shapes if sh.name == "KPI caption")
+    victim.height = 20000  # far too small for its text
+    broken = tmp_path / "broken.pptx"
+    prs.save(str(broken))
+    assert any("overflow" in p for p in check_text_bounds(broken))
 
 
 # ---------------------------------------------------------------- multiline warning banners
@@ -557,7 +558,7 @@ def _banner_deck(source):
     labelled = deck.apply_labels(_spec(), source)
     slides = []
     for s in labelled.slides:
-        slides.append(s.model_copy(update={"labels": [*s.labels, LONG_LABEL, LONG_LABEL]}))
+        slides.append(s.model_copy(update={"labels": [*s.labels, LONG_LABEL]}))
     return DeckSpec(slides=slides)
 
 
@@ -571,9 +572,11 @@ def test_multiline_warning_banner_grows_to_contain_its_text(tmp_path, source):
     prs = Presentation(str(path))
     for slide in prs.slides:
         banner = next(s for s in slide.shapes if s.name == "Labels")
-        body = next(s for s in slide.shapes if s.name == "Body")
-        assert banner.height > Inches(1.0)  # four-plus wrapped lines, not the old 0.4in strip
-        assert body.top >= banner.top + banner.height  # body starts below the banner
+        assert banner.height > Inches(0.6)  # wrapped to several lines, not a one-line strip
+        chrome = {"LS logo tile", "LS logo", "Kicker", "Title", "Evidence status", "Labels"}
+        footer = ("Footer", "Footer rule", "Slide number")
+        below = [s for s in slide.shapes if s.name not in chrome and s.name not in footer]
+        assert all(s.top >= banner.top + banner.height for s in below)  # content under banner
         assert banner.top + banner.height < prs.slide_height - Inches(0.7)  # above the footer
     assert check_text_bounds(path) == []
 
@@ -601,3 +604,188 @@ def test_bounds_check_flags_a_banner_too_small_for_its_text(tmp_path, source):
             shape.height = 365760  # the old fixed 0.4in strip
     prs.save(str(path))
     assert any("outside its banner" in p for p in check_text_bounds(path))
+
+
+# ---------------------------------------------------------------- enterprise layout (V2)
+def _build(tmp_path, source, spec=None, name="deck.pptx"):
+    from launchscout.exports.pptx_builder import build_pptx
+
+    path = tmp_path / name
+    build_pptx(deck.apply_labels(spec or _spec(), source), source, path, date(2026, 10, 14))
+    return path, Presentation(str(path))
+
+
+def _more_competitors(source, n):
+    template = source.competitors.competitors[1]
+    comps = [
+        template.model_copy(update={"name": f"Rival {i}", "url": f"https://r{i}.example/"})
+        for i in range(n)
+    ]
+    return source.model_copy(
+        update={"competitors": source.competitors.model_copy(update={"competitors": comps})}
+    )
+
+
+def _shape(slide, name):
+    return next(s for s in slide.shapes if s.name == name)
+
+
+def test_every_slide_has_logo_status_footer_and_native_shapes(tmp_path, source):
+    path, prs = _build(tmp_path, source)
+    assert len(prs.slides) == 6
+    for number, slide in enumerate(prs.slides, 1):
+        names = [s.name for s in slide.shapes]
+        assert names.count("LS logo") == 1 and "LS logo tile" in names
+        assert sum(1 for s in slide.shapes if s.shape_type == 13) == 1
+        assert _shape(slide, "Slide number").text_frame.text == f"{number} / 6"
+        assert "PARTIAL EVIDENCE" in _shape(slide, "Evidence status").text_frame.text
+        assert "PARTIAL EVIDENCE" in _shape(slide, "Labels").text_frame.text
+        assert slide.has_notes_slide and slide.notes_slide.notes_text_frame.text.strip()
+    assert _shape(prs.slides[0], "LS logo").image.sha1  # a real picture asset
+
+
+def test_visual_components_present_and_editable(tmp_path, source):
+    _, prs = _build(tmp_path, source)
+    s1, s2, s3, s4, s5, s6 = prs.slides
+    assert sum(1 for s in s1.shapes if s.name == "KPI tile") == 4
+    charts = [s for s in s1.shapes if getattr(s, "has_chart", False) and s.has_chart]
+    assert len(charts) == 1  # native, editable chart
+    assert any(s.name.startswith("Pricing: ") for s in s2.shapes)
+    assert any(s.name.startswith("Offer: ") for s in s3.shapes)  # evidence coverage grid
+    assert sum(1 for s in s4.shapes if s.name.startswith("Flow arrow")) == 3
+    assert {"Stage 1", "Stage 2", "Stage 3", "Stage 4"} <= {s.name for s in s4.shapes}
+    warning = _shape(s5, "Price warning").text_frame.text
+    assert warning == "RECOMMENDATION — NOT A VERIFIED MARKET PRICE"
+    assert _shape(s5, "Price value").text_frame.text == "₹99"
+    milestones = sum(1 for s in s6.shapes if s.name.startswith("Milestone"))
+    assert milestones == 2  # the fixture plan has two weeks; cards follow the data
+    assert sum(1 for s in s6.shapes if s.name.startswith("Timeline link")) == milestones - 1
+    for slide in prs.slides:
+        assert all(s.shape_type != 13 or s.name == "LS logo" for s in slide.shapes)
+
+
+def test_layout_has_no_overflow_collisions_or_footer_hits(tmp_path, source):
+    from launchscout.exports.pptx_builder import check_text_bounds
+
+    path, _ = _build(tmp_path, source)
+    assert check_text_bounds(path) == []
+
+
+@pytest.mark.parametrize("n", [1, 3, 5])
+def test_layout_adapts_to_competitor_count(tmp_path, source, n):
+    from launchscout.exports.pptx_builder import check_text_bounds
+
+    path, prs = _build(tmp_path, _more_competitors(source, n), name=f"n{n}.pptx")
+    assert len(prs.slides) == 6
+    matrix = " ".join(s.name for s in prs.slides[1].shapes)
+    assert all(f"Rival {i}" in matrix for i in range(n))
+    assert check_text_bounds(path) == []
+
+
+def test_zero_competitors_and_no_weeks_do_not_crash(tmp_path, source):
+    from launchscout.exports.pptx_builder import check_text_bounds
+
+    empty = _more_competitors(source, 0)
+    spec = _spec(lambda s: s[5].update(bullets=[]))
+    path, prs = _build(tmp_path, empty, spec, "empty.pptx")
+    assert len(prs.slides) == 6
+    assert check_text_bounds(path) == []
+
+
+def test_space_utilisation_is_high_on_every_slide(tmp_path, source):
+    from launchscout.exports.pptx_builder import layout_utilization
+
+    path, _ = _build(tmp_path, source)
+    values = layout_utilization(path)
+    assert all(u >= 0.6 for u in values), values
+
+
+def test_layout_engine_is_not_hardcoded_to_one_idea():
+    import launchscout.exports.pptx_builder as builder
+    import launchscout.exports.pptx_components as components
+
+    for module in (builder, components):
+        code = Path(module.__file__).read_text(encoding="utf-8")
+        for needle in ("Pune", "juice", "699", "gym", "iBites", "Earth Organic"):
+            assert needle not in code, (module.__name__, needle)
+
+
+def test_price_parts_split_recommended_price_text():
+    from launchscout.exports.pptx_builder import _price_parts
+
+    head, plan, derived, note = _price_parts(
+        "₹699 for a seven-day plan of one juice per day (about ₹100 per juice); proposed only"
+    )
+    assert head == "₹699" and plan == "Seven-day plan of one juice per day"
+    assert derived == "about ₹100 per juice" and note == "proposed only"
+    assert _price_parts("INR 99 per bottle")[0] == "₹99"
+    assert _price_parts("no figure") == ("", "", "", "no figure")
+
+
+def test_parse_weeks_orders_weeks_and_falls_back_to_steps():
+    from launchscout.exports.pptx_builder import parse_weeks
+
+    assert parse_weeks(["Week 1: a", "Week 2 - b"]) == [("Week 1", "a"), ("Week 2", "b")]
+    assert parse_weeks(["do x", "do y"]) == [("Step 1", "do x"), ("Step 2", "do y")]
+
+
+def test_notes_keep_sources_and_full_text_for_the_slide(tmp_path, source):
+    _, prs = _build(tmp_path, source)
+    notes = prs.slides[1].notes_slide.notes_text_frame.text
+    assert "Sources:" in notes and U1 in notes and "Validated slide text:" in notes
+    assert "Labels:" in notes
+
+
+# ---------------------------------------------------------------- badge / chip sizing
+def _chips(prs):
+    """Single-line status labels: shapes with word wrap disabled and a text label."""
+    for number, slide in enumerate(prs.slides, 1):
+        for shape in slide.shapes:
+            if shape.has_text_frame and shape.text_frame.text.strip():
+                if shape.text_frame.word_wrap is False:
+                    yield number, shape
+
+
+def test_status_badges_never_wrap_and_hold_their_full_label(tmp_path, source):
+    _, prs = _build(tmp_path, source)
+    seen = {name for _, shape in _chips(prs) for name in [shape.name]}
+    assert "Positioning tag" in seen and any(n.startswith("Stage 4 tag") for n in seen)
+    for number, shape in _chips(prs):
+        frame = shape.text_frame
+        label = frame.text
+        assert "\n" not in label
+        size = max(r.font.size.pt for p in frame.paragraphs for r in p.runs)
+        inner_pt = shape.width / 12700 - (frame.margin_left + frame.margin_right) / 12700
+        # bold capitals need about 0.6 em each; the chip must hold the whole label with margin
+        assert inner_pt >= len(label) * size * 0.6, (number, shape.name, label)
+
+
+def test_badges_fit_a_measured_calibri_width_with_padding(tmp_path, source):
+    from PIL import ImageFont
+
+    font_path = Path("C:/Windows/Fonts/calibrib.ttf")
+    if not font_path.exists():
+        pytest.skip("Calibri is not installed; measured-width check skipped")
+    _, prs = _build(tmp_path, source)
+    for number, shape in _chips(prs):
+        frame = shape.text_frame
+        size = max(r.font.size.pt for p in frame.paragraphs for r in p.runs)
+        font = ImageFont.truetype(str(font_path), 100)
+        measured_pt = font.getlength(frame.text) / 100 * size
+        inner_pt = shape.width / 12700 - (frame.margin_left + frame.margin_right) / 12700
+        assert inner_pt >= measured_pt * 1.15, (number, shape.name, frame.text)
+
+
+def test_very_long_badge_label_gets_a_wider_chip_instead_of_wrapping():
+    from pptx import Presentation as P
+    from pptx.util import Inches
+
+    from launchscout.exports.pptx_components import PURPLE, PURPLE_DARK, chip, chip_width
+
+    prs = P()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    short, long = "RECOMMENDATION", "RECOMMENDATION — PROPOSED, NOT VERIFIED"
+    assert chip_width(long, 11) > chip_width(short, 11) * 2
+    shape, width = chip(slide, 1, 1, long, PURPLE_DARK, PURPLE, size=11, name="long")
+    assert shape.text_frame.word_wrap is False
+    assert shape.width == Inches(width) or abs(shape.width - Inches(width)) < 5

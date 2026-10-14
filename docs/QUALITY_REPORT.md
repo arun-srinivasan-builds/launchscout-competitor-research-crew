@@ -91,3 +91,6 @@ One live generation (1 call, 4,486 tokens; time unavailable). First claim check 
 
 ### M6 closure
 Banner overflow on long recommendation labels fixed and covered by regression tests (`test_multiline_warning_banner_grows_to_contain_its_text`, `test_bounds_check_flags_a_banner_too_small_for_its_text`). Fit is verified by estimate only; the revised deck has not been rendered or visually inspected by me. Live metrics unchanged: 1 call, 4,486 tokens, time unavailable.
+
+### M6 enterprise deck (V2)
+Layout is deterministic and evidence-grounded; visuals show missing evidence as missing (unknown prices, zero complaints, unreadable sources). Verified programmatically: six slides, logo on each, native shapes/chart/connectors, labels, notes, no text overflow or collisions by estimate, utilisation 0.78-0.92. NOT verified: true PowerPoint rendering (no Office/LibreOffice here); a Pillow geometry preview using Calibri metrics was inspected, which is not a substitute. Known limits: text is auto-shrunk to 11 pt then shortened with an ellipsis in dense cells (full text in notes); extremely long banners with many labels can still crowd content; utilisation is a coarse grid estimate that counts cards, not information density.

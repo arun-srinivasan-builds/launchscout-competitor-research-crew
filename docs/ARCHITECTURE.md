@@ -64,3 +64,6 @@ cockpit's Engineering Trace and used by the comparison panel.
 
 ## Pitch Deck (M6)
 saved run files -> `deck.load_deck_source` -> `deck_prompt` (facts only) -> Pitch Deck agent (no tools, one call) -> `parse_deck_spec` -> `apply_labels` (code) -> `validate_deck_claims` -> `exports/pptx_builder.build_pptx` -> `runs/<id>/deck/`. Violations keep `deck_spec.json`/`deck_meta.json` but block the PPTX.
+
+### Deck rendering (V2)
+`pptx_components` (primitives, fit-to-box, palette) -> `pptx_builder` (chrome + six layouts from `DeckSource` and `DeckSpec`; `check_text_bounds`, `layout_utilization`). Visual facts (counts, competitor rows, evidence coverage, gaps, price parts, weeks) come from the saved run; the validated spec supplies slide titles, notes, labels and launch-plan weeks.

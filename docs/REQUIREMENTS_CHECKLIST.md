@@ -62,3 +62,6 @@ Not marked complete. Live runs L1-L4 (see `BUILD_LOG.md`) exercised the sequenti
 
 | SB-08 | Multiline label banners stay inside their highlight and above the footer | `tests/test_deck.py::test_multiline_warning_banner_grows_to_contain_its_text`, `::test_short_labels_keep_a_compact_banner`, `::test_bounds_check_flags_a_banner_too_small_for_its_text` | Offline pass; visual re-check pending |
 | SB-01..SB-06 | Live check L6 deck | 1 call, 4,486 tokens, claim check 0 violations after rule correction, PPTX 6 slides | Executed; time unavailable |
+
+| SB-09 | Enterprise infographic deck: dashboard, matrix, evidence grid, flow, pricing dashboard, roadmap; logo on every slide | `tests/test_deck.py::test_every_slide_has_logo_status_footer_and_native_shapes`, `::test_visual_components_present_and_editable`, `::test_layout_adapts_to_competitor_count`, `::test_layout_has_no_overflow_collisions_or_footer_hits`, `::test_space_utilisation_is_high_on_every_slide` | Offline pass; real-render check pending |
+| SB-10 | Layout engine not hardcoded to one idea | `::test_layout_engine_is_not_hardcoded_to_one_idea` | Offline pass |
