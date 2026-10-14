@@ -1,0 +1,12 @@
+# Streamlit-native theme tokens. Component CSS lives only in ui/theme.py (one theme unit).
+# Palette: navy #0B2545 / #13315C, steel-blue #3F6E99, teal #0F766E, soft-white #F7F9FB.
+[theme]
+base = "light"
+primaryColor = "#13315C"
+backgroundColor = "#F7F9FB"
+secondaryBackgroundColor = "#E4ECF4"
+textColor = "#0B2545"
+font = "sans serif"
+
+[browser]
+gatherUsageStats = false

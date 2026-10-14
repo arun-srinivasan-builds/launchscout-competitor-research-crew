@@ -1,0 +1,9 @@
+# LaunchScout runtime dependencies (Python 3.11). Pins verified by import smoke test on 14 Oct 2026.
+crewai==1.15.28
+crewai-tools==1.15.28
+streamlit==1.65.0
+python-pptx==1.0.2
+pydantic==2.12.5
+reportlab==5.0.1
+python-dotenv==1.2.4
+openai==2.54.0
