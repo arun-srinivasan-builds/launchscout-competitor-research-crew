@@ -35,6 +35,9 @@ def _tool_argument(tool_args: Any) -> str:
         except ValueError:
             return _clip(tool_args, 120)
     if isinstance(data, dict):
+        if data.get("coworker"):  # CrewAI delegation tools: who, and a short task summary
+            task = _clip(str(data.get("task") or data.get("question") or ""), 90)
+            return _clip(f"{data['coworker']}: {task}", 120)
         for key in ("search_query", "query", "website_url", "url", "filename"):
             if data.get(key):
                 return _clip(str(data[key]), 120)
@@ -50,6 +53,9 @@ class EventCollector:
         clock: Callable[[], datetime] | None = None,
         llm_limit: int | None = None,
         on_llm_limit: Callable[[int], None] | None = None,
+        agent_llm_limits: dict[str, int] | None = None,
+        delegation_limit: int | None = None,
+        on_limit: Callable[[str, int, int], None] | None = None,
     ):
         self._lock = threading.Lock()
         self._events: list[RunEvent] = []
@@ -65,6 +71,12 @@ class EventCollector:
         self._llm_limit = llm_limit
         self._on_llm_limit = on_llm_limit
         self._limit_fired = False
+        self._agent_limits = agent_llm_limits or {}
+        self._delegation_limit = delegation_limit
+        self._on_limit = on_limit
+        self.agent_llm: dict[str, int] = {}
+        self.delegations = 0
+        self._fired: set[str] = set()
 
     def emit(
         self,
@@ -86,12 +98,32 @@ class EventCollector:
             data={k: (redact(v) if isinstance(v, str) else v) for k, v in data.items()},
         )
         fire = False
+        fire_other: tuple[str, int, int] | None = None
         with self._lock:
             self._events.append(event)
             if kind == "tool_started":
                 self.tool_started += 1
+                tool_name = str(data.get("tool", ""))
+                if tool_name.lower().replace("_", " ") in (
+                    "delegate work to coworker",
+                    "ask question to coworker",
+                ):
+                    self.delegations += 1
+                    if (
+                        self._delegation_limit is not None
+                        and self.delegations > self._delegation_limit
+                        and "delegations" not in self._fired
+                    ):
+                        self._fired.add("delegations")
+                        fire_other = ("delegations", self.delegations, self._delegation_limit)
             if kind == "llm_completed":
                 self.llm_events += 1
+                who = agent or ""
+                self.agent_llm[who] = self.agent_llm.get(who, 0) + 1
+                cap = self._agent_limits.get(who)
+                if cap is not None and self.agent_llm[who] > cap and who not in self._fired:
+                    self._fired.add(who)
+                    fire_other = ("agent_llm_calls:" + who, self.agent_llm[who], cap)
                 if (
                     self._llm_limit is not None
                     and self.llm_events > self._llm_limit
@@ -104,6 +136,8 @@ class EventCollector:
                     handle.write(event.model_dump_json() + "\n")
         if fire and self._on_llm_limit is not None:
             self._on_llm_limit(self.llm_events)
+        if fire_other is not None and self._on_limit is not None:
+            self._on_limit(*fire_other)
         return event
 
     @staticmethod
@@ -267,7 +301,12 @@ def install_listeners() -> None:
 
     @on(AgentExecutionCompletedEvent)
     def _agent_done(c: EventCollector, e: Any) -> None:
-        c.emit("tool_note", f"{_role(e) or 'Agent'} produced its answer", _role(e), status="ok")
+        c.emit(
+            "agent_completed",
+            f"{_role(e) or 'Agent'} produced its answer",
+            _role(e),
+            status="ok",
+        )
 
     @on(AgentExecutionErrorEvent)
     def _agent_err(c: EventCollector, e: Any) -> None:
@@ -288,6 +327,13 @@ def install_listeners() -> None:
     def _tool_finished(c: EventCollector, e: Any) -> None:
         tool = str(getattr(e, "tool_name", "tool"))
         cached = bool(getattr(e, "from_cache", False))
+        started, finished = getattr(e, "started_at", None), getattr(e, "finished_at", None)
+        ms = None
+        try:
+            if started is not None and finished is not None:
+                ms = int((finished - started).total_seconds() * 1000)
+        except (TypeError, ValueError):
+            ms = None
         c.emit(
             "tool_finished",
             f"{tool} finished" + (" (cache)" if cached else ""),
@@ -295,6 +341,7 @@ def install_listeners() -> None:
             status="ok",
             tool=tool,
             from_cache=cached,
+            ms=ms,
         )
 
     @on(ToolUsageErrorEvent)

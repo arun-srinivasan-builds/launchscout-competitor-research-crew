@@ -16,6 +16,8 @@ from tests.helpers import (
     PARTIAL_REPORT_MD,
     PASS_REPORT_MD,
     make_executor,
+    wait_finished,
+    wait_idle,
 )
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -26,13 +28,9 @@ INPUT = ResearchInput(
 
 
 def _finish(manager, run):
-    end = time.time() + 10
-    while time.time() < end:
-        snap = manager.snapshot(run.paths.run_id)
-        if snap and not snap.active:
-            return snap
-        time.sleep(0.02)
-    raise AssertionError("run did not finish")
+    snap = wait_finished(manager, run)
+    wait_idle(manager)
+    return snap
 
 
 def _run(tmp_path, **executor_kwargs):
@@ -146,9 +144,7 @@ def _fill(at: AppTest) -> None:
 
 
 def _wait(manager):
-    end = time.time() + 10
-    while manager.active_run() is not None and time.time() < end:
-        time.sleep(0.02)
+    wait_idle(manager)
 
 
 @pytest.fixture

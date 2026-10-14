@@ -14,9 +14,10 @@ from urllib.parse import urlsplit
 
 import streamlit as st
 
+from launchscout.comparison import build_comparison, pick_pair
 from launchscout.evidence import EvidenceEntry, normalize_url
-from launchscout.runner import RunSnapshot
-from launchscout.schemas import Competitor
+from launchscout.runner import RunSnapshot, get_manager
+from launchscout.schemas import Competitor, ResearchMode
 from launchscout.validation import section_key, split_top_sections
 from ui.theme import inject_cockpit_theme
 from ui.trace import fmt_elapsed, render_environment, render_trace_run
@@ -225,11 +226,12 @@ def _assumptions(markdown: str | None) -> list[str]:
 
 def _crew_chip(snap: RunSnapshot) -> str:
     done = len(snap.completed_tasks)
+    mode = "hierarchical" if snap.mode is ResearchMode.HIERARCHICAL else "sequential"
     took = fmt_elapsed(snap.elapsed_seconds())
     if snap.status == "complete":
         return (
             f'<span class="ck-chip ck-ok"><span class="ck-dot"></span>Crew completed '
-            f"<small>{done}/4 agents · {took}</small></span>"
+            f"<small>{done}/4 agents · {took} · {mode}</small></span>"
         )
     names = {
         "partial": "Crew partial",
@@ -242,7 +244,8 @@ def _crew_chip(snap: RunSnapshot) -> str:
     kind = "ck-warn" if snap.status in ("partial", "cancelled", "timeout") else "ck-bad"
     return (
         f'<span class="ck-chip {kind}"><span class="ck-dot"></span>'
-        f"{names.get(snap.status, snap.status)} <small>{done}/4 agents · {took}</small></span>"
+        f"{names.get(snap.status, snap.status)} "
+        f"<small>{done}/4 agents · {took} · {mode}</small></span>"
     )
 
 
@@ -602,6 +605,31 @@ def _area_quality(snap: RunSnapshot) -> None:
         st.caption(f"Evidence ledger: {summary}.")
 
 
+def _comparison_panel(snap: RunSnapshot) -> None:
+    """Sequential vs hierarchical from recorded runs with the same input (never projected)."""
+    sequential, hierarchical = pick_pair(get_manager().runs_dir(), snap)
+    rows = build_comparison(sequential, hierarchical)
+    with st.expander("Mode comparison: sequential vs hierarchical (recorded runs only)"):
+        st.caption(
+            "Both columns come from saved runs with identical input. 'Not yet measured' means no "
+            "such run exists; nothing is estimated. Task completion only says the agents "
+            "finished; research quality is the evidence and the validation result."
+        )
+        st.dataframe(
+            [
+                {
+                    "Group": r.group,
+                    "Metric": r.metric,
+                    "Sequential": r.sequential,
+                    "Hierarchical": r.hierarchical,
+                }
+                for r in rows
+            ],
+            hide_index=True,
+            width="stretch",
+        )
+
+
 def _area_trace(snap: RunSnapshot) -> None:
     u = snap.usage
     m = snap.agent_metrics()
@@ -615,8 +643,15 @@ def _area_trace(snap: RunSnapshot) -> None:
         _kpi(refused, None, "Budget refusals"),
         _kpi(errors, None, "Tool errors"),
     ]
+    if snap.mode is ResearchMode.HIERARCHICAL:
+        mgr = m.get("Research Manager", {})
+        tiles += [
+            _kpi(int(mgr.get("llm_calls", 0)), None, "Manager model calls"),
+            _kpi(int(mgr.get("delegations", 0)), None, "Delegations"),
+        ]
     st.markdown(f'<div class="ck-kpis">{"".join(tiles)}</div>', unsafe_allow_html=True)
     st.caption("Counts are measured from the saved run events; nothing is estimated.")
+    _comparison_panel(snap)
     with st.expander(
         "Engineering Trace: events, tool calls, evidence ledger, usage per agent", expanded=False
     ):

@@ -78,3 +78,7 @@ Not applicable in M2 (no research executed). Verified source coverage: n/a. Unsu
 | M4 saved-run replay (uncommitted) | 181 tests | 181 passed |
 | M4 cockpit prototype | 195 tests | 195 passed |
 | M4 cockpit integration (M4 gate) | 197 tests | 197 passed; ruff clean; responsive check at 1440/1280/1024/768/390 |
+| M5 hierarchical (offline) | 221 tests | 221 passed; ruff clean; no API calls |
+
+## M5 live hierarchical result (L6)
+Hierarchical run reached the same acceptance outcome as sequential L5 (partial_failed_acceptance; 2 competitors, 0 verified prices) with 18 vs 13 model calls, +9.2% tokens, 178 s vs 108 s, and an extra R7 failure. Single run; no variance claim. See M5_HIERARCHICAL_LIVE_TEST_PLAN.md.

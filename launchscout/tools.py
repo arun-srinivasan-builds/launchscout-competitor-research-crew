@@ -156,7 +156,7 @@ class ToolContext:
                     self._scope_search[scope] = used + 1
         if hit:
             self._outcome("search_the_web", "cache_hit", scope, query)
-            return cached
+            return f"{cached}\n{self.budget_note(scope)}"
         if over:
             self._outcome("search_the_web", "refused_budget", scope, query)
             return (
@@ -199,7 +199,7 @@ class ToolContext:
         text = f"{UNTRUSTED_OPEN}\n{text}\n{UNTRUSTED_CLOSE}"
         with self.lock:
             self._cache[key] = text
-        return text
+        return f"{text}\n{self.budget_note(scope)}"
 
     # -- read page -------------------------------------------------------------------------
     def read(self, url: str, scope: str = "") -> str:
@@ -229,7 +229,7 @@ class ToolContext:
                     self._scope_read[scope] = used + 1
         if hit:
             self._outcome("read_web_page", "cache_hit", scope, url)
-            return cached
+            return f"{cached}\n{self.budget_note(scope)}"
         if over:
             self._outcome("read_web_page", "refused_budget", scope, url)
             return (
@@ -267,7 +267,7 @@ class ToolContext:
         )
         with self.lock:
             self._cache[key] = out
-        return out
+        return f"{out}\n{self.budget_note(scope)}"
 
     # -- write report ----------------------------------------------------------------------
     def write_report(self, content: str) -> str:
@@ -285,6 +285,24 @@ class ToolContext:
             with self.lock:
                 self.tool_errors += 1
             return f"WRITE ERROR: {type(exc).__name__}"
+
+    def remaining(self, scope: str) -> tuple[int, int]:
+        """(searches, page reads) this scope may still use, bounded by the run totals."""
+        with self.lock:
+            searches = min(
+                self.limits.searches_per_agent - self._scope_search.get(scope, 0),
+                self.limits.max_searches - self.search_calls,
+            )
+            reads = min(
+                self.limits.scrapes_per_agent - self._scope_read.get(scope, 0),
+                self.limits.max_scrapes - self.scrape_calls,
+            )
+        return max(0, searches), max(0, reads)
+
+    def budget_note(self, scope: str) -> str:
+        """Trusted line appended to tool results so agents stop asking once budgets are gone."""
+        searches, reads = self.remaining(scope)
+        return f"[Budget remaining for you: {searches} search(es), {reads} page read(s)]"
 
     def counters(self) -> dict[str, int]:
         with self.lock:

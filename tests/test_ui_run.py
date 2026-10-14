@@ -1,14 +1,13 @@
 """UI behaviour around real (stubbed-executor) runs: start, live state, results, guards."""
 
 import threading
-import time
 from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
 
 from launchscout.runner import set_manager
 from tests.conftest import make_manager
-from tests.helpers import make_executor
+from tests.helpers import make_executor, wait_idle
 
 ROOT = Path(__file__).resolve().parent.parent
 APP = str(ROOT / "app.py")
@@ -31,11 +30,8 @@ def _markdown(at: AppTest) -> str:
     return " ".join(m.value for m in at.markdown)
 
 
-def _wait_idle(manager, timeout: float = 10.0) -> None:
-    deadline = time.time() + timeout
-    while manager.active_run() is not None and time.time() < deadline:
-        time.sleep(0.02)
-    assert manager.active_run() is None
+def _wait_idle(manager, timeout: float = 90.0) -> None:
+    wait_idle(manager, timeout)
 
 
 def test_run_starts_in_background_and_ui_shows_running_state(tmp_path):
@@ -103,14 +99,15 @@ def test_second_session_sees_same_run_and_cannot_duplicate(tmp_path):
     _wait_idle(manager)
 
 
-def test_hierarchical_does_not_execute(tmp_path):
+def test_hierarchical_run_is_started_through_the_same_manager(tmp_path):
     manager = make_manager(tmp_path)
     set_manager(manager)
     at = _app()
     _fill(at, mode="hierarchical")
     at.button(key="run_research").click().run()
-    assert any("milestone M5" in i.value for i in at.info)
-    assert manager.latest_run_id() is None
+    assert any("milestone M5" in i.value for i in at.info) is False
+    assert manager.latest_run_id() is not None
+    assert manager.snapshot(manager.latest_run_id()).mode.value == "hierarchical"
 
 
 def test_missing_configuration_blocks_run(tmp_path):

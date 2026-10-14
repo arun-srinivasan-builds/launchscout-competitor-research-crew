@@ -1,9 +1,9 @@
-import time
 from datetime import UTC, datetime
 
 from launchscout import events
 from launchscout.events import EventCollector, load_events
 from launchscout.progress import AGENT_ORDER, AgentStatus, RunEvent, reduce_events
+from tests.helpers import wait_until
 
 
 def ev(kind, agent=None, summary="", status="info", **data):
@@ -99,9 +99,7 @@ def test_crewai_bus_events_reach_active_collector():
         )
         crewai_event_bus.emit(None, event)
         crewai_event_bus.flush()
-        deadline = time.time() + 3
-        while not collector.events() and time.time() < deadline:
-            time.sleep(0.05)
+        wait_until(lambda: bool(collector.events()), what="bus event recorded")
     finally:
         events.set_active_collector(None)
     recorded = collector.events()

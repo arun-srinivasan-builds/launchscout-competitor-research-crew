@@ -19,7 +19,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from launchscout.config import RunLimits, Settings, load_settings
-from launchscout.crew import run_sequential
+from launchscout.crew import run_crew
 from launchscout.events import EventCollector, load_events, set_active_collector
 from launchscout.evidence import EvidenceEntry, EvidenceLedger
 from launchscout.grounding import (
@@ -33,7 +33,15 @@ from launchscout.grounding import (
 )
 from launchscout.links import Fetcher
 from launchscout.logging_utils import get_logger, redact
-from launchscout.progress import AGENT_ORDER, AgentState, RunEvent, agent_metrics, reduce_events
+from launchscout.progress import (
+    AGENT_KEYS,
+    AGENT_ORDER,
+    MANAGER_ROLE,
+    AgentState,
+    RunEvent,
+    agent_metrics,
+    reduce_events,
+)
 from launchscout.reporting import produce_report
 from launchscout.runs import DEFAULT_RUNS_DIR, RunPaths, create_run_dir
 from launchscout.schemas import (
@@ -61,9 +69,7 @@ class RunSnapshot(BaseModel):
 
     run_id: str
     mode: ResearchMode
-    status: Literal[
-        "created", "running", "complete", "partial", "failed", "cancelled", "timeout"
-    ]
+    status: Literal["created", "running", "complete", "partial", "failed", "cancelled", "timeout"]
     phase: Phase
     error: str | None = None
     started_at: datetime
@@ -102,7 +108,11 @@ class RunSnapshot(BaseModel):
         return self.phase != "finished"
 
     def agent_states(self) -> dict[str, AgentState]:
-        return reduce_events(self.events, run_active=self.active)
+        return reduce_events(
+            self.events,
+            run_active=self.active,
+            with_manager=self.mode is ResearchMode.HIERARCHICAL,
+        )
 
     def elapsed_seconds(self, now: datetime | None = None) -> float:
         end = self.finished_at or now or datetime.now(UTC)
@@ -134,10 +144,17 @@ class ResearchRun:
         self.finished_at: datetime | None = None
         self.today: date = started_at.astimezone().date()
         self.llm_limit_hit = False
+        self.limit_reason: str | None = None
+        self.guard_issues: list[str] = []
+        hierarchical = research_input.mode is ResearchMode.HIERARCHICAL
+        self.llm_cap = limits.max_llm_calls_hierarchical if hierarchical else limits.max_llm_calls
         self.collector = EventCollector(
             paths.events_jsonl,
-            llm_limit=limits.max_llm_calls,
+            llm_limit=self.llm_cap,
             on_llm_limit=self._on_llm_limit,
+            agent_llm_limits={MANAGER_ROLE: limits.max_manager_llm_calls} if hierarchical else None,
+            delegation_limit=limits.max_delegations if hierarchical else None,
+            on_limit=self._on_limit,
         )
         self.ledger = EvidenceLedger()
         self.ctx = ToolContext(
@@ -164,16 +181,28 @@ class ResearchRun:
         self.thread: threading.Thread | None = None
         self._lock = threading.Lock()
 
-    def _on_llm_limit(self, count: int) -> None:
-        """Hard stop: the run made more model calls than the configured limit."""
+    def _stop_for_budget(self, reason: str, summary: str) -> None:
         self.llm_limit_hit = True
+        self.limit_reason = reason
         self.phase = "stopping"
         self.ctx.cancel_event.set()
-        self.collector.emit(
-            "run_budget_stop",
-            f"LLM call limit ({self.limits.max_llm_calls}) exceeded after {count} calls; stopping",
-            status="error",
+        self.collector.emit("run_budget_stop", summary, status="error")
+
+    def _on_llm_limit(self, count: int) -> None:
+        """Hard stop: the run made more model calls than the configured limit."""
+        self._stop_for_budget(
+            f"LLM call limit ({self.llm_cap}) reached",
+            f"LLM call limit ({self.llm_cap}) exceeded after {count} calls; stopping",
         )
+
+    def _on_limit(self, kind: str, count: int, limit: int) -> None:
+        """Hard stop for Manager-specific or delegation budgets (hierarchical mode)."""
+        if kind == "delegations":
+            reason = f"Delegation limit ({limit}) reached"
+        else:
+            who = kind.split(":", 1)[-1] or "agent"
+            reason = f"{who} LLM call limit ({limit}) reached"
+        self._stop_for_budget(reason, f"{reason} after {count}; stopping")
 
     # -- called from the worker/executor --------------------------------------------------
     def record_output(self, task_name: str, raw: str) -> None:
@@ -185,7 +214,7 @@ class ResearchRun:
         with self._lock:
             outputs = dict(self.raw_outputs)
             comp, rev, strat = self.competitors, self.reviews, self.strategy
-            issues: list[str] = []
+            issues: list[str] = list(self.guard_issues)
             for grounded in (comp, rev, strat):
                 if grounded is not None:
                     issues.extend(grounded.issues)
@@ -232,8 +261,7 @@ class ResearchRun:
             serper_calls=counters["serper_calls"],
             scrape_calls=counters["scrape_calls"],
             # wrapper cache hits plus calls CrewAI's own cache answered before our tool ran
-            cache_hits=counters["cache_hits"]
-            + max(0, c.tool_started - self.ctx.invocations),
+            cache_hits=counters["cache_hits"] + max(0, c.tool_started - self.ctx.invocations),
             llm_calls=c.llm_events or None,
         )
 
@@ -256,9 +284,7 @@ def input_key(research_input: ResearchInput) -> tuple[str, ...]:
 def _default_executor(run: ResearchRun) -> None:
     if os.environ.get("LAUNCHSCOUT_NO_LIVE"):
         raise RuntimeError("live runs are disabled in this process (LAUNCHSCOUT_NO_LIVE)")
-    out = run_sequential(
-        run.input, run.settings, run.ctx, run.limits, run.today, run.record_output
-    )
+    out = run_crew(run.input, run.settings, run.ctx, run.limits, run.today, run.record_output)
     run.crew_usage = getattr(out, "token_usage", None)
     for task_output in getattr(out, "tasks_output", None) or []:
         name = getattr(task_output, "name", None)
@@ -331,8 +357,6 @@ class RunManager:
     # -- commands --------------------------------------------------------------------------
     def start(self, research_input: ResearchInput) -> ResearchRun | None:
         """Start a run, or return None if one is already active (duplicate prevention)."""
-        if research_input.mode is not ResearchMode.SEQUENTIAL:
-            raise NotImplementedError("hierarchical execution is not available until M5")
         with self._lock:
             for run_id in self._order:
                 existing = self._runs[run_id]
@@ -375,7 +399,9 @@ class RunManager:
     # -- worker ----------------------------------------------------------------------------
     def _work(self, run: ResearchRun) -> None:
         set_active_collector(run.collector)
-        run.collector.emit("run_started", f"Run {run.paths.run_id} started (sequential)")
+        run.collector.emit(
+            "run_started", f"Run {run.paths.run_id} started ({run.input.mode.value})"
+        )
         watchdog = threading.Timer(run.limits.run_timeout_s, self._on_timeout, args=(run,))
         watchdog.daemon = True
         watchdog.start()
@@ -388,8 +414,33 @@ class RunManager:
         finally:
             watchdog.cancel()
             self._flush_bus()
-            self._finalize(run, error)
-            set_active_collector(None)
+            try:
+                self._finalize(run, error)
+            except Exception as exc:  # noqa: BLE001 - a failed finalization must not strand the run
+                self._finalize_failed(run, exc)
+            finally:
+                set_active_collector(None)
+
+    def _finalize_failed(self, run: ResearchRun, exc: Exception) -> None:
+        """Finalization itself raised (disk, PDF, validation): end the run as failed, visibly.
+
+        Without this the worker thread dies while the run still reports "running", so the UI
+        would poll an unfinishable run forever and nothing would explain why.
+        """
+        reason = f"Finalization failed: {type(exc).__name__}: {redact(str(exc))}"[:400]
+        log.warning("run finalization failed: %s", type(exc).__name__)
+        with run._lock:
+            has_outputs = bool(run.raw_outputs)
+            run.status = "partial" if has_outputs else "failed"
+            run.error = reason if not run.error else f"{run.error}; {reason}"
+            run.finished_at = datetime.now(UTC)
+        run.collector.emit("run_finished", f"Run ended: {reason}", status="error")
+        try:
+            self._persist(run)
+        except Exception:  # noqa: BLE001 - disk may be the very problem; the state still flips
+            log.warning("could not persist a failed finalization")
+        with run._lock:
+            run.phase = "finished"
 
     @staticmethod
     def _flush_bus() -> None:
@@ -414,13 +465,13 @@ class RunManager:
 
     def _finalize(self, run: ResearchRun, error: str | None) -> None:
         ledger, outputs = run.ledger, dict(run.raw_outputs)
-        comp = ground_competitors(parse_competitors(outputs[TASK_RESEARCH]), ledger) if (
-            TASK_RESEARCH in outputs
-        ) else None
-        rev = parse_reviews(outputs[TASK_REVIEWS], ledger) if TASK_REVIEWS in outputs else None
-        strat = (
-            parse_strategy(outputs[TASK_STRATEGY], ledger) if TASK_STRATEGY in outputs else None
+        comp = (
+            ground_competitors(parse_competitors(outputs[TASK_RESEARCH]), ledger)
+            if (TASK_RESEARCH in outputs)
+            else None
         )
+        rev = parse_reviews(outputs[TASK_REVIEWS], ledger) if TASK_REVIEWS in outputs else None
+        strat = parse_strategy(outputs[TASK_STRATEGY], ledger) if TASK_STRATEGY in outputs else None
         # Deterministic validation + export from stored outputs (no model, no new searches).
         outcome = produce_report(
             run.paths,
@@ -431,9 +482,7 @@ class RunManager:
             run.link_fetcher,
         )
         report_text = outcome.final_markdown
-        unsupported = next(
-            (r.items for r in outcome.validation.rules if r.id == "R3"), []
-        )
+        unsupported = next((r.items for r in outcome.validation.rules if r.id == "R3"), [])
         with run._lock:
             run.validation = outcome.validation
             run.report_files = outcome.files
@@ -455,17 +504,27 @@ class RunManager:
         run.collector.emit(
             "grounding",
             f"Report validation: {outcome.validation.state}"
-            + ("" if outcome.validation.acceptance.result == "pass"
-               else f" ({len(outcome.validation.acceptance.reasons)} reason(s))"),
+            + (
+                ""
+                if outcome.validation.acceptance.result == "pass"
+                else f" ({len(outcome.validation.acceptance.reasons)} reason(s))"
+            ),
             status="ok" if outcome.validation.acceptance.result == "pass" else "error",
         )
 
         parsed_ok = all(
-            g is not None and g.value is not None for g in (comp, rev, strat)  # type: ignore[union-attr]
+            g is not None and g.value is not None
+            for g in (comp, rev, strat)  # type: ignore[union-attr]
         )
         have_report = report_text is not None
         if run.llm_limit_hit and not error:
-            error = f"LLM call limit ({run.limits.max_llm_calls}) reached"
+            error = run.limit_reason or f"LLM call limit ({run.llm_cap}) reached"
+        undelegated = self._undelegated(run, outputs)
+        if undelegated:
+            with run._lock:
+                run.guard_issues.extend(undelegated)
+            for issue in undelegated:
+                run.collector.emit("grounding", issue, status="error")
         if run.timed_out:
             status = "timeout"
         elif run.cancel_requested:
@@ -476,6 +535,8 @@ class RunManager:
             status = "failed"
         elif error or not (parsed_ok and have_report and len(outputs) == len(TASK_ORDER)):
             status = "partial" if outputs or have_report else "failed"
+        elif undelegated:
+            status = "partial"  # Manager did the work itself: not specialist evidence
         else:
             status = "complete"
         if status == "cancelled":
@@ -489,6 +550,29 @@ class RunManager:
         self._persist(run)  # artifacts are on disk before the run is reported finished
         with run._lock:
             run.phase = "finished"
+
+    @staticmethod
+    def _undelegated(run: ResearchRun, outputs: dict[str, str]) -> list[str]:
+        """Hierarchical guard: every completed task must show its specialist at work."""
+        if run.input.mode is not ResearchMode.HIERARCHICAL:
+            return []
+        seen = {
+            e.agent
+            for e in run.collector.events()
+            if e.kind == "agent_started" and e.agent in AGENT_KEYS
+        }
+        task_roles = {
+            "Competitor research": "Market Researcher",
+            "Customer review analysis": "Review Analyst",
+            "Strategy and positioning": "Strategy Analyst",
+            "Report writing": "Report Writer",
+        }
+        return [
+            f"Manager reported '{task}' complete without delegating to the {role}; "
+            "the output is not specialist work and is not evidence"
+            for task, role in task_roles.items()
+            if task in outputs and role not in seen
+        ]
 
     def _persist(self, run: ResearchRun) -> None:
         snap = run.snapshot()

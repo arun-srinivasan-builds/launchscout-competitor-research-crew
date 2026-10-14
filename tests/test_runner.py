@@ -9,21 +9,16 @@ from launchscout.progress import AgentStatus
 from launchscout.runner import RunManager, snapshot_from_disk
 from launchscout.schemas import ResearchInput, ResearchMode
 from tests.conftest import make_manager
-from tests.helpers import make_executor
+from tests.helpers import make_executor, wait_idle
+from tests.helpers import wait_finished as _wait_finished
 
 INPUT = ResearchInput(
     idea="Healthy millet meal boxes", city="Coimbatore", target_customer="office workers"
 )
 
 
-def wait_finished(manager: RunManager, run_id: str, timeout: float = 10.0):
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        snap = manager.snapshot(run_id)
-        if snap is not None and not snap.active:
-            return snap
-        time.sleep(0.02)
-    raise AssertionError("run did not finish")
+def wait_finished(manager: RunManager, run_id: str, timeout: float = 90.0):
+    return _wait_finished(manager, run_id, timeout)
 
 
 def test_complete_run_collects_outputs_and_artifacts(tmp_path):
@@ -78,9 +73,7 @@ def test_duplicate_run_prevented_while_active(tmp_path):
     assert manager.start(INPUT) is None
     gate.set()
     wait_finished(manager, first.paths.run_id)
-    deadline = time.time() + 5
-    while manager.active_run() is not None and time.time() < deadline:
-        time.sleep(0.02)
+    wait_idle(manager)
     assert manager.start(INPUT) is not None
 
 
@@ -171,8 +164,38 @@ def test_unfinished_run_on_disk_is_not_shown_as_running(tmp_path):
     assert snap.phase == "finished" and "interrupted" in (snap.error or "")
 
 
-def test_hierarchical_start_refused(tmp_path):
+def test_hierarchical_start_is_accepted(tmp_path):
     manager = make_manager(tmp_path)
     hier = INPUT.model_copy(update={"mode": ResearchMode.HIERARCHICAL})
-    with pytest.raises(NotImplementedError):
-        manager.start(hier)
+    run = manager.start(hier)
+    assert run is not None
+    assert wait_finished(manager, run.paths.run_id).mode is ResearchMode.HIERARCHICAL
+
+
+def test_finalization_failure_ends_the_run_as_failed_instead_of_stranding_it(tmp_path, monkeypatch):
+    """If finalization itself raises, the run must not stay 'running' forever."""
+    import launchscout.reporting as reporting
+
+    def boom(*args, **kwargs):
+        raise OSError("disk locked")
+
+    monkeypatch.setattr(reporting, "write_report_files", boom)
+    manager = make_manager(tmp_path)
+    run = manager.start(INPUT)
+    snap = wait_finished(manager, run.paths.run_id)
+    assert snap.phase == "finished"
+    assert snap.status in ("failed", "partial")
+    assert "Finalization failed: OSError" in (snap.error or "")
+    assert any(e.kind == "run_finished" and e.status == "error" for e in snap.events)
+    assert manager.active_run() is None
+    assert manager.start(INPUT) is not None  # a new run is possible afterwards
+
+
+def test_wait_helper_fails_loudly_for_a_run_that_never_ends(tmp_path):
+    gate = threading.Event()
+    manager = make_manager(tmp_path, executor=make_executor(gate=gate))
+    run = manager.start(INPUT)
+    with pytest.raises(AssertionError, match="did not finish"):
+        _wait_finished(manager, run, timeout=0.3)
+    gate.set()
+    assert _wait_finished(manager, run).phase == "finished"

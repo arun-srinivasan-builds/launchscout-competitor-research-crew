@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -225,3 +226,144 @@ def make_executor(
 def write_report_impl(run_dir: Any, content: str) -> str:
     (run_dir / "report.md").write_text(content, encoding="utf-8")
     return "written"
+
+
+MANAGER = "Research Manager"
+
+
+def make_hierarchical_executor(
+    gate: threading.Event | None = None,
+    undelegated: tuple[str, ...] = (),
+    manager_calls_per_task: int = 2,
+    delegations_per_task: int = 1,
+    report: str | None = None,
+    competitors_json: str | None = None,
+) -> Callable[[ResearchRun], None]:
+    """Offline stand-in for a hierarchical crew: Manager delegates to the real specialists.
+
+    It reproduces the *event shape* CrewAI emits (Manager task, delegation tool call, specialist
+    execution, Manager review) with a real tool context. It proves our accounting and guards,
+    not that live CrewAI delegation works.
+    """
+    payloads = {
+        TASK_RESEARCH: competitors_json or COMPETITORS_JSON,
+        TASK_REVIEWS: REVIEWS_JSON,
+        TASK_STRATEGY: STRATEGY_JSON,
+        TASK_REPORT: "Report written to report.md",
+    }
+
+    def llm(c, role: str) -> None:
+        c.add_usage({"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120})
+        c.emit(
+            "llm_completed",
+            "Model call completed",
+            role,
+            status="ok",
+            prompt_tokens=100,
+            completion_tokens=20,
+            total_tokens=120,
+        )
+
+    def execute(run: ResearchRun) -> None:
+        c = run.collector
+        c.emit("crew_started", "Crew started (hierarchical)")
+        for task, specialist in ROLES.items():
+            c.emit("task_started", f"Task started: {task}", MANAGER, task)
+            c.emit("agent_started", f"{MANAGER} started", MANAGER)
+            if run.ctx.cancel_event.is_set():
+                return
+            llm(c, MANAGER)
+            if task not in undelegated:
+                for _ in range(delegations_per_task):
+                    arg = f"{specialist}: {task}"
+                    c.emit(
+                        "tool_started",
+                        f"Delegate work to coworker: {arg}",
+                        MANAGER,
+                        tool="Delegate work to coworker",
+                        arg=arg,
+                    )
+                    c.emit("agent_started", f"{specialist} started", specialist)
+                    scope = {TASK_RESEARCH: "market", TASK_REVIEWS: "reviews"}.get(task)
+                    if scope:
+                        run.ctx.search("millet lunch box Coimbatore", scope)
+                        run.ctx.read("https://millet-kitchen.example/menu", scope)
+                    if task == TASK_REPORT:
+                        run.ctx.write_report(report or PASS_REPORT_MD)
+                    if gate is not None:
+                        while not gate.wait(0.02):
+                            if run.ctx.cancel_event.is_set():
+                                break
+                    if run.ctx.cancel_event.is_set():
+                        return
+                    llm(c, specialist)
+                    c.emit(
+                        "agent_completed",
+                        f"{specialist} produced its answer",
+                        specialist,
+                        status="ok",
+                    )
+                    c.emit(
+                        "tool_finished",
+                        "Delegate work to coworker finished",
+                        MANAGER,
+                        status="ok",
+                        tool="Delegate work to coworker",
+                        ms=1200,
+                    )
+            for _ in range(manager_calls_per_task - 1):
+                if run.ctx.cancel_event.is_set():
+                    return  # step callback stops the Manager after a budget stop
+                llm(c, MANAGER)
+            run.record_output(task, payloads[task])
+            c.emit("agent_completed", f"{MANAGER} produced its answer", MANAGER, status="ok")
+            c.emit("task_completed", f"Task complete: {task}", MANAGER, task, status="ok")
+        c.emit("crew_completed", "Crew finished all tasks", status="ok")
+
+    return execute
+
+
+def wait_finished(manager: Any, run_or_id: Any, timeout: float = 90.0) -> Any:
+    """Block until a run's worker thread has ended, then return its final snapshot.
+
+    Event-based (thread join), not a polling deadline that silently falls through: if the run
+    never ends the test fails here with the run's state instead of asserting on a half-finished
+    run further down.
+    """
+    run = run_or_id
+    if isinstance(run_or_id, str):
+        run = manager._runs[run_or_id]
+    run.thread.join(timeout)
+    if run.thread.is_alive():
+        raise AssertionError(
+            f"run {run.paths.run_id} did not finish within {timeout:.0f}s "
+            f"(phase={run.phase}, status={run.status})"
+        )
+    snap = manager.snapshot(run.paths.run_id)
+    assert snap is not None and snap.phase == "finished", (
+        f"run {run.paths.run_id} worker ended without reaching 'finished': "
+        f"phase={snap.phase if snap else None}"
+    )
+    return snap
+
+
+def wait_idle(manager: Any, timeout: float = 90.0) -> None:
+    """Block until the manager has no live worker thread (fails loudly otherwise)."""
+    deadline = time.monotonic() + timeout
+    while True:
+        run = manager.active_run()
+        if run is None:
+            return
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise AssertionError(f"run {run.paths.run_id} still active after {timeout:.0f}s")
+        run.thread.join(min(remaining, 1.0))
+
+
+def wait_until(predicate: Any, timeout: float = 15.0, what: str = "condition") -> None:
+    """Poll `predicate` and raise with a clear message if it never becomes true."""
+    deadline = time.monotonic() + timeout
+    while not predicate():
+        if time.monotonic() > deadline:
+            raise AssertionError(f"{what} not reached within {timeout:.0f}s")
+        time.sleep(0.02)

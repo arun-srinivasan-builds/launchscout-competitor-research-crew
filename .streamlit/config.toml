@@ -10,3 +10,7 @@ font = "sans serif"
 
 [browser]
 gatherUsageStats = false
+
+[server]
+# Serves ./static (the LS logo) at /app/static/ so the header can reference it by a relative URL.
+enableStaticServing = true

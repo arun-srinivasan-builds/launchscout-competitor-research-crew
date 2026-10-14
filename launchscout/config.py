@@ -44,6 +44,11 @@ class RunLimits(BaseModel):
     run_timeout_s: int = 1200
     # Hard stop on model calls per run (observed runs used 10-13; see LLM audit).
     max_llm_calls: int = 40
+    # Hierarchical runs add Manager calls, so they get a larger total but a hard Manager cap.
+    max_llm_calls_hierarchical: int = 45
+    max_manager_llm_calls: int = 16
+    max_delegations: int = 8
+    manager_max_iter: int = 10
     cancel_grace_s: int = 60
 
 

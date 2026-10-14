@@ -8,7 +8,13 @@ from collections.abc import Callable
 from datetime import date
 from typing import Any
 
-from launchscout.agents import ROLE_MARKET, ROLE_REVIEWS, ROLE_WRITER, build_agents
+from launchscout.agents import (
+    ROLE_MARKET,
+    ROLE_REVIEWS,
+    ROLE_WRITER,
+    build_agents,
+    build_manager,
+)
 from launchscout.config import RunLimits, Settings
 from launchscout.events import install_listeners
 from launchscout.llm import build_llm
@@ -44,11 +50,14 @@ def build_crew(
     today: date,
     on_task_output: OnTaskOutput | None = None,
 ) -> Any:
-    """Assemble agents, tasks and a `Process.sequential` crew (no hierarchy, no delegation)."""
+    """Assemble the four specialists, the four tasks and a CrewAI crew for the requested mode.
+
+    Sequential: `Process.sequential`. Hierarchical: `Process.hierarchical` with a real Manager
+    agent (same LLM, no tools, delegation to the same four specialists). Tasks, tools, budgets,
+    callbacks and evidence handling are identical in both modes.
+    """
     from crewai import Crew, Process
 
-    if research_input.mode is not ResearchMode.SEQUENTIAL:
-        raise NotImplementedError("hierarchical execution is not available until M5")
     tools = {
         ROLE_MARKET: build_tools(ctx, scope="market"),
         ROLE_REVIEWS: build_tools(ctx, scope="reviews"),
@@ -68,20 +77,26 @@ def build_crew(
 
         return _callback
 
-    tasks = build_tasks(agents, research_input, today, callback_factory)
-    return Crew(
-        agents=list(agents.values()),
-        tasks=tasks,
-        process=Process.sequential,
-        verbose=False,
-        memory=False,
-        cache=True,
-        tracing=False,
-        step_callback=check_cancel,  # checked after every agent step
-    )
+    tasks = build_tasks(agents, research_input, today, callback_factory, limits)
+    common: dict[str, Any] = {
+        "agents": list(agents.values()),
+        "tasks": tasks,
+        "verbose": False,
+        "memory": False,
+        "cache": True,
+        "tracing": False,
+        "step_callback": check_cancel,  # checked after every agent step, Manager included
+    }
+    if research_input.mode is ResearchMode.HIERARCHICAL:
+        return Crew(
+            process=Process.hierarchical,
+            manager_agent=build_manager(llm, limits),
+            **common,
+        )
+    return Crew(process=Process.sequential, **common)
 
 
-def run_sequential(
+def run_crew(
     research_input: ResearchInput,
     settings: Settings,
     ctx: ToolContext,
@@ -92,6 +107,9 @@ def run_sequential(
     """Run the crew to completion in the calling (worker) thread; returns CrewAI's output."""
     _quiet_telemetry()
     install_listeners()
-    llm = build_llm(settings)
+    llm = build_llm(settings)  # the single, configured MODEL_NAME client for every agent
     crew = build_crew(research_input, llm, ctx, limits, today, on_task_output)
     return crew.kickoff()
+
+
+run_sequential = run_crew  # backwards-compatible name used by earlier milestones and tests

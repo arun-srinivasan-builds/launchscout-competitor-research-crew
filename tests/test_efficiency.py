@@ -12,7 +12,7 @@ from launchscout.config import RunLimits
 from launchscout.runner import input_key, set_manager
 from launchscout.schemas import ResearchInput
 from tests.conftest import make_manager
-from tests.helpers import make_executor
+from tests.helpers import make_executor, wait_idle
 
 ROOT = Path(__file__).resolve().parent.parent
 APP = str(ROOT / "app.py")
@@ -63,10 +63,8 @@ def _fill(at: AppTest) -> None:
     r.text_input[2].set_value("office workers aged 25-40")
 
 
-def _wait_idle(manager, timeout=10.0):
-    end = time.time() + timeout
-    while manager.active_run() is not None and time.time() < end:
-        time.sleep(0.02)
+def _wait_idle(manager, timeout=90.0):
+    wait_idle(manager, timeout)
 
 
 def test_reruns_polling_and_tab_rendering_make_no_llm_calls(tmp_path, llm_sentinel):

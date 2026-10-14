@@ -29,24 +29,36 @@ class AgentNode:
 
 AGENTS: tuple[AgentNode, ...] = (
     AgentNode(
-        "market_researcher", "Market Researcher",
+        "market_researcher",
+        "Market Researcher",
         "Finds 3-5 real competitors, offers, prices and sales channels.",
-        ("Web search", "Website scraper"), "Competitor profiles", "&#8981;",
+        ("Web search", "Website scraper"),
+        "Competitor profiles",
+        "&#8981;",
     ),
     AgentNode(
-        "review_analyst", "Review Analyst",
+        "review_analyst",
+        "Review Analyst",
         "Collects attributable customer praise and complaints.",
-        ("Web search", "Website scraper"), "Review evidence", "&#9776;",
+        ("Web search", "Website scraper"),
+        "Review evidence",
+        "&#9776;",
     ),
     AgentNode(
-        "strategy_analyst", "Strategy Analyst",
+        "strategy_analyst",
+        "Strategy Analyst",
         "Compares competitors; recommends gap, price and positioning.",
-        ("No tools: reasons over research",), "Gap and positioning", "&#9672;",
+        ("No tools: reasons over research",),
+        "Gap and positioning",
+        "&#9672;",
     ),
     AgentNode(
-        "report_writer", "Report Writer",
+        "report_writer",
+        "Report Writer",
         "Writes the six-section sourced report to file.",
-        ("File writer",), "Sourced report", "&#9998;",
+        ("File writer",),
+        "Sourced report",
+        "&#9998;",
     ),
 )
 
@@ -90,7 +102,7 @@ def _card(index: int, node: AgentNode, state: AgentState) -> str:
         f'<span class="ls-node-status">{_esc(state.status.value)}</span></span></div>'
         '<div class="ls-task">'
         '<div class="ls-task-row">'
-        f'<span>{_esc(state.task_label)}</span><span>{progress}</span></div>'
+        f"<span>{_esc(state.task_label)}</span><span>{progress}</span></div>"
         f'<div class="ls-track"><div class="ls-fill {_progress_class(state.progress_percent)}">'
         "</div></div></div>"
         '<div class="ls-panel"><div class="ls-panel-title">Planned tools</div>'
@@ -106,6 +118,35 @@ def _card(index: int, node: AgentNode, state: AgentState) -> str:
     )
 
 
+def _manager(state: AgentState) -> str:
+    """Manager node (hierarchical mode): real delegation and review events, never simulated."""
+    delegations = (
+        "".join(f"<li>{_esc(c)}</li>" for c in state.tool_calls)
+        or '<li class="ls-none">No delegation recorded</li>'
+    )
+    events = (
+        "".join(f"<li>{_esc(e)}</li>" for e in state.events)
+        or '<li class="ls-none">No events received</li>'
+    )
+    return (
+        f'<div class="ls-manager-node {_STATUS_CLASS[state.status]}" id="ls-agent-manager" '
+        'data-agent="manager"><div class="ls-node-head"><span class="ls-glyph">&#9733;</span>'
+        '<span class="ls-node-id"><span class="ls-node-name">Research Manager</span>'
+        f'<span class="ls-node-status">{_esc(state.status.value)}</span></span></div>'
+        '<div class="ls-task"><div class="ls-task-row">'
+        f"<span>{_esc(state.task_label)}</span><span>&mdash;</span></div></div>"
+        '<div class="ls-panel-text">Delegates to and reviews the four specialists; does no '
+        "research and writes no report itself.</div>"
+        '<div class="ls-mgr-cols"><div class="ls-panel"><div class="ls-panel-title">'
+        f'Delegations</div><ul class="ls-events">{delegations}</ul></div>'
+        '<div class="ls-panel"><div class="ls-panel-title">Manager events</div>'
+        f'<ul class="ls-events">{events}</ul></div></div></div>'
+        '<div class="ls-mgr-links" aria-hidden="true">'
+        + '<div class="ls-drop"><i></i></div>' * 4
+        + '</div><div class="ls-vlink ls-vlink-mgr"></div>'
+    )
+
+
 def render_workflow_html(
     mode: ResearchMode,
     states: Mapping[str, AgentState] | None = None,
@@ -116,15 +157,7 @@ def render_workflow_html(
     parts = ['<div class="ls-canvas" role="group" aria-label="Live Agent Workflow">']
     parts.append('<div class="ls-flow">')
     if mode is ResearchMode.HIERARCHICAL:
-        parts.append(
-            '<div class="ls-manager-node" id="ls-agent-manager" data-agent="manager">'
-            '<div class="ls-node-head"><span class="ls-glyph">&#9733;</span>'
-            '<span class="ls-node-id"><span class="ls-node-name">Manager agent</span>'
-            '<span class="ls-node-status">Idle</span></span></div>'
-            '<div class="ls-panel-text">Coordinates and delegates to the four specialists. '
-            "Hierarchical execution is not yet available (M5).</div>"
-            '<span class="ls-chip ls-chip-warn">Not yet implemented</span></div>'
-        )
+        parts.append(_manager(states.get("manager", AgentState())))
     parts.append('<div class="ls-arc ls-arc-top ls-arc-12"></div>')
     parts.append('<div class="ls-arc ls-arc-bottom ls-arc-23"></div>')
     parts.append('<div class="ls-arc ls-arc-top ls-arc-34"></div>')

@@ -22,7 +22,7 @@ from launchscout.saved_runs import (
 )
 from launchscout.schemas import ResearchInput
 from tests.conftest import make_manager
-from tests.helpers import PARTIAL_REPORT_MD, make_executor
+from tests.helpers import PARTIAL_REPORT_MD, make_executor, wait_finished, wait_idle
 
 ROOT = Path(__file__).resolve().parent.parent
 APP = str(ROOT / "app.py")
@@ -33,21 +33,13 @@ OTHER = ResearchInput(idea="Cold pressed juice", city="Pune", target_customer="g
 
 
 def _finish(manager: RunManager, run):
-    end = time.time() + 10
-    while time.time() < end:
-        snap = manager.snapshot(run.paths.run_id)
-        if snap and not snap.active:
-            return snap
-        time.sleep(0.02)
-    raise AssertionError("run did not finish")
+    return wait_finished(manager, run)
 
 
 def _run(manager: RunManager, research_input: ResearchInput = INPUT):
     run = manager.start(research_input)
-    _finish(manager, run)
-    end = time.time() + 5
-    while manager.active_run() is not None and time.time() < end:
-        time.sleep(0.02)
+    wait_finished(manager, run)
+    wait_idle(manager)
     return run
 
 
@@ -203,7 +195,7 @@ def no_calls(monkeypatch):
     monkeypatch.setattr("crewai.LLM.call", trap("LLM.call"))
     monkeypatch.setattr("launchscout.tools._default_search", trap("serper"))
     monkeypatch.setattr("launchscout.tools._default_scrape", trap("scrape"))
-    monkeypatch.setattr("launchscout.runner.run_sequential", trap("run_sequential"))
+    monkeypatch.setattr("launchscout.runner.run_crew", trap("run_sequential"))
     return hits
 
 
@@ -304,9 +296,7 @@ def test_saved_runs_not_selectable_while_a_run_is_active(tmp_path):
     assert any("RUNNING NOW" in o for o in options)  # the live run is not "interrupted"
     assert saved.paths.run_id
     gate.set()
-    end = time.time() + 10
-    while manager.active_run() is not None and time.time() < end:
-        time.sleep(0.02)
+    wait_idle(manager)
 
 
 def test_starting_a_new_run_returns_view_to_the_live_run(tmp_path):
@@ -321,9 +311,7 @@ def test_starting_a_new_run_returns_view_to_the_live_run(tmp_path):
     r.text_input[1].set_value("Delhi")
     r.text_input[2].set_value("commuters")
     at.button(key="run_research").click().run()
-    end = time.time() + 10
-    while manager.active_run() is not None and time.time() < end:
-        time.sleep(0.02)
+    wait_idle(manager)
     at.run()
     assert at.selectbox(key="saved_run_select").value == ""
     assert not any("Viewing saved run" in i.value for i in at.info)

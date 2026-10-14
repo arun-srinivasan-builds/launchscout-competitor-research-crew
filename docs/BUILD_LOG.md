@@ -43,7 +43,8 @@ No breaks were reported for this window and none are assumed.
 | M3 Real sequential CrewAI execution | Implemented; live runs L1-L4 executed; awaiting user acceptance review (uncommitted) | not recorded | not recorded | none yet |
 | M3 efficiency follow-up | Audit complete; standards added; code and tests done | not recorded | not recorded | `d9ea22e` |
 | M4 Evidence-validated reports | Complete: validators, gate, PDF/Markdown, saved-run replay, cockpit in production; 197 tests; one controlled live run (L5) returned `partial_failed_acceptance` on actual evidence; awaiting user review | not recorded | not recorded | see git log |
-| M4–M8 | Not authorized | — | — | none |
+| M5 Hierarchical Manager | Offline implementation complete; 221 tests; no live run; awaiting user review (uncommitted) | not recorded | 7:20 PM (offline tests passed) | none yet |
+| M6–M8 | Not authorized | — | — | none |
 
 ## Breaks and pauses
 None reported by the user.
@@ -331,7 +332,49 @@ Offline re-validation of the stored live runs (copies; no network, no model): L1
 
 Rework cycles: 3 (R4 acknowledgement, PDF font/import and header formatting, fixture and test corrections). Known limits: link checks were not exercised against the real network (disabled in tests); a fresh live run is needed to see real link statuses and a real new PDF; the Writer's free-form table is parsed by header-agnostic row matching (competitor name in a row), so unusual layouts could fail R2/R4 and would then be flagged, not passed.
 
-## Requirements carried into M5+ (unchanged)
+## M5 - Hierarchical CrewAI Manager (offline implementation complete; awaiting review; uncommitted)
+
+Authorized by the user on 14 Oct 2026: implement genuine hierarchical execution, **no paid call**.
+Baseline: M4 `20786ed`, 197 tests. System clock at the end of offline implementation and tests:
+7:20 PM IST (start time was not recorded; no elapsed time is claimed).
+
+| Item | Detail |
+|---|---|
+| Process | `Process.hierarchical` with `manager_agent` (role "Research Manager"), same `MODEL_NAME` client as the specialists, no tools, `allow_delegation`; the four specialists are unchanged and cannot delegate |
+| One pipeline | `crew.build_crew` serves both modes; tasks, tools, budgets, callbacks, grounding, R1-R8, gate, exports, persistence, replay are shared. `run_sequential` kept as an alias of `run_crew` |
+| Installed-CrewAI facts verified offline | Manager executes each task; per task it receives only the delegation and ask-question tools, restricted to that task's specialist; a Manager with tools is rejected by CrewAI; specialists keep their own tools and budgets |
+| Events | `agent_completed` is now a first-class event (CrewAI emits no task lifecycle for delegated work); delegation tool events carry `<specialist>: <task>` and latency; Manager is attributed by role |
+| Budgets | Total model calls 45 (Manager included), Manager calls 16, delegations 8, plus existing tool, iteration, agent and run limits; breach -> `run_budget_stop` with the reason |
+| Guards | Task finished without its specialist having started -> guard issue, status `partial` (never `complete`); cancellation reaches the Manager through the same step and task callbacks; Manager rules forbid research, embellishment and following untrusted text |
+| Budget exposure | Prompts state the per-agent search and page-read allowance; every search/read result ends with a trusted "[Budget remaining ...]" line (outside the untrusted envelope); cache hits spend nothing and show the same line |
+| UI | Hierarchical selection shows the Research Manager node with real Delegations and Manager events, dashed delegation connectors to all four specialist cards (vertical connector when stacked), no fake progress; sequential workflow unchanged; cockpit chip names the mode; Engineering Trace gains Manager tiles and the comparison panel |
+| Comparison | `launchscout/comparison.py`: sequential vs hierarchical from recorded runs with identical input; missing run -> "Not yet measured"; groups keep task completion apart from research quality |
+| Tests | 221 passed, ruff clean; 26 new in `tests/test_hierarchical.py`; no API calls (traps on LLM, Serper, page read, crew) |
+| Not claimed | Live delegation behaviour, Manager output fidelity, token overhead: unmeasured until the approved single live test |
+
+Defects and rework (actual): (1) a generic `ruff format` of tests again reformatted unrelated files
+(formatting only); (2) tests that asserted the old budget-free tool output needed the trusted
+budget line allowed outside the untrusted envelope; (3) first Manager-cap test expected
+instant stops, the stand-in executor now honours the cancel flag as the real step callback does;
+(4) status text "Not yet implemented" assertion matched the Weekly tab, narrowed to the M5
+phrase. Decision: keep each task bound to its specialist (CrewAI then offers the Manager only
+that coworker), trading free routing for deterministic, budget-safe delegation.
+
+Live-test proposal: `docs/M5_HIERARCHICAL_LIVE_TEST_PLAN.md` (not executed).
+
+### M5 UI polish: LS logo and Back to top (uncommitted)
+
+| Item | Detail |
+|---|---|
+| Logo | Supplied artwork stored unmodified as `static/ls_logo.png` (1060x803, SHA-256 `bb95f5caaa07...`), served by Streamlit static serving (`enableStaticServing = true`) at the relative URL `app/static/ls_logo.png`; header shows it at 44 px height (40 px on phones), width from the original aspect ratio (1.32 measured), replacing the single-letter mark; title, subtitle, tagline, colours and typography unchanged |
+| Artwork issue (reported, not altered) | The image has an opaque off-white background (RGB 252,252,252) and blurred ghost duplicate letters. On the dark navy header it reads as a light tile with the maroon L and navy S clearly visible, but the tile clashes with the dark styling. A transparent or light-on-dark variant from the artwork owner would fix it; no edit was made |
+| Back to top | `ui/assets/back_to_top.js`, injected once from `app.py` with `st.html(..., unsafe_allow_javascript=True)`; 44x44 px rounded square, navy with teal outline, fixed bottom-right (1 rem), visible after 400 px of scrolling, smooth scroll (instant under reduced motion), accessible name "Back to top", visible 3 px teal focus outline; client-side only (no rerun, no network, no state); styles in `ui/theme.py` |
+| Defect found and fixed | The first version built the icon from an HTML string; Streamlit's sanitiser (DOMPurify) removed the whole script, leaving an empty element. Icon is now built with DOM calls and a test forbids markup-looking text in the script |
+| Verified in a real browser (100 percent zoom) | 1440, 1280, 1024, 768, 390 px: logo loaded at natural 1060x803, aspect preserved, no horizontal scroll; button hidden at the top, visible after scrolling, 44x44 at 16 px from the right and bottom, one instance on all three tabs and after a real rerun, click returns to scrollTop 0, real Tab key reaches it and Enter activates it, focus outline solid 3 px teal; no interactive element lay under it at the 600 px scroll position |
+| Tests | 11 focused tests in `tests/test_chrome.py` (artwork hash and dimensions, static URL and config, header markup, CSS sizing, single injection, script contract, sanitiser safety, no model/research calls); full suite and ruff reported with the completion message |
+| Not touched | Orchestration, Manager logic, workflow cards, cockpit, saved runs, validation, exports, efficiency controls |
+
+## Requirements carried into M6+ (unchanged)
 - Hierarchical Manager delegation using the same `AgentState` contract and the same validators (M5).
 - Deck from the validated report only; partial reports refused (M6). Weekly deterministic-first reruns (M7).
 
@@ -340,3 +383,10 @@ Rework cycles: 3 (R4 acknowledgement, PDF font/import and header formatting, fix
 
 ## Proposed, not approved
 None.
+
+## M5 pre-commit review: transparent logo and intermittent test (uncommitted)
+- Logo: `static/ls_logo.png` (supplied, SHA-256 bb95f5ca...) kept unmodified; `static/ls_logo_transparent.png` derived by `scripts/make_ls_logo_transparent.py` (background and ghost letters removed, edges un-blended to the letter colours, cropped; no redraw). Header shows it at 44px / 40px on a plain soft-white tile because the navy S is unreadable directly on the navy header. Reproducibility and halo tests in `tests/test_chrome.py`.
+- Intermittent cockpit test: the test helper polled with a 10s deadline and fell through silently, so a slow machine asserted on a run that had not finished. Tests now join the worker thread (`wait_finished`/`wait_idle`/`wait_until` in `tests/helpers.py`) and fail loudly. Product defect found while probing: if finalization raised, the run stayed "running" forever; `runner._finalize_failed` now ends it as failed/partial with a visible reason (tested). The original single failure was not reproduced; the slow-finalization mechanism was reproduced by probe.
+
+## M5 live hierarchical test L6 (about 8:15 PM IST (machine clock), uncommitted)
+- Single authorized paid run, identical input to L5, agreed limits (30 calls / 12 Manager / 6 delegations / 12 searches / 10 reads / 12 min) set in `scripts/run_live_hierarchical.py`. Result: complete, partial_failed_acceptance; 18 calls, 75,446 tokens, 12 searches, 9 reads, 4 delegations, 178 s. Details and comparison in `docs/M5_HIERARCHICAL_LIVE_TEST_PLAN.md`. Evidence preserved in `runs/20261014-201109-...-c0fe/` (gitignored). No second run. UI frozen per instruction.

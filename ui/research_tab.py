@@ -149,7 +149,7 @@ def _render_input_panel(
             horizontal=True,
             key="research_mode",
             help="Sequential runs the four specialists in order. Hierarchical adds a Manager "
-            "agent that delegates; its execution arrives in a later milestone (M5).",
+            "agent that delegates each task to the same four specialists (more model calls).",
         )
         submitted = st.button("Run Research", type="primary", key="run_research", disabled=active)
         cancelled = False
@@ -191,15 +191,6 @@ def _handle_submit(mode: ResearchMode, fields: Fields, notices: list[tuple[str, 
         research_input = validate_input(idea, city, customer, known, mode)
     except InputValidationError as exc:
         notices.extend(("error", message) for message in exc.errors.values())
-        return
-    if mode is ResearchMode.HIERARCHICAL:
-        notices.append(
-            (
-                "info",
-                "Hierarchical execution is not available yet (milestone M5). Input validated; "
-                "no research was run. Choose Sequential to run the four-agent crew.",
-            )
-        )
         return
     manager = get_manager()
     reusable = manager.find_reusable(research_input) or find_matching_saved_run(

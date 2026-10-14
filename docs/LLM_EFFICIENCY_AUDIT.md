@@ -112,6 +112,25 @@ repeats research; every standard has an automated test.
   calls in L1-L3). Replacing it with deterministic assembly would save those calls and their prompt tokens,
   but the assignment requires the agent, so this is a decision for the user, not an automatic change.
 
+## M5 efficiency design (hierarchical mode; nothing measured live yet)
+
+- **Cost model.** The Manager adds model calls: at least a decision call and a finalization call
+  per task (about 8 minimum for four tasks), and its prompts carry task text and prior results.
+  This overhead is *expected* to be material relative to the 13-call sequential baseline (L5); the
+  size is unmeasured and must not be assumed.
+- **Hard bounds.** Total 45 calls (Manager included), Manager 16, delegations 8. Each breach stops
+  the run with a stated reason; the Manager cap is enforced per role from `llm_completed` events.
+- **Measurement.** The per-agent table now includes `Research Manager` (calls, tokens, delegations,
+  delegation latency); run totals include Manager usage; the comparison panel lines up L5 with a
+  future hierarchical run and shows `Not yet measured` until one exists.
+- **Refusal loops.** Prompts and tool results now state the remaining budget (L5 had 9 refusals).
+  The effect is unmeasured.
+- **No weakening.** Evidence rules, R1-R8 and the gate are identical in both modes; the Manager
+  cannot skip them, and a task finished without its specialist is flagged and downgraded.
+- **Open question for the live test.** Whether the Manager's extra review adds any evidence
+  quality. If not, sequential remains the efficient default and hierarchical is documented as the
+  assignment's coordination demonstration.
+
 ## Quality guard
 Efficiency changes are accepted only if, on the same inputs, they do not reduce: number of
 competitors with evidence URLs, verified-price count, sourced review findings, or report-section

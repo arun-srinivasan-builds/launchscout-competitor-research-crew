@@ -17,8 +17,8 @@ def render() -> None:
         '<div class="ls-card"><h4>Scheduler status</h4>'
         '<div class="ls-row ls-muted">Three separate facts, never inferred from one another.</div>'
         f'<div class="ls-row">{pill("Documented: not yet written", "warn")}'
-        f'{pill("Confirmed configured: no", "warn")}'
-        f'{pill("Last successful scheduled run: none recorded", "idle")}</div></div>',
+        f"{pill('Confirmed configured: no', 'warn')}"
+        f"{pill('Last successful scheduled run: none recorded', 'idle')}</div></div>",
         unsafe_allow_html=True,
     )
     st.button("Rerun now", disabled=True, key="weekly_rerun")

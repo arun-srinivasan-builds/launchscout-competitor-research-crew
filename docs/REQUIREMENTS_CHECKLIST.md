@@ -28,8 +28,11 @@
 | E-10 | Each standard has an automated test | `tests/test_efficiency.py` | 17 tests | Partial (E-06, E-07 pending their milestones) |
 | SR-01 | Saved runs reopenable in Streamlit with zero model/search calls, after restart; states distinguished; historical runs unchanged | `launchscout/saved_runs.py`, `runner.snapshot_from_disk`, `ui/research_tab.py` | `tests/test_saved_runs.py` (12) incl. restart recovery, zero-call traps, hash comparison, real `runs/` replay | **Done (M4 add-on)**; how-to in `docs/REVIEWING_SAVED_RUNS.md` |
 | PR-01 | Partial-report behaviour | `reporting.py`, `exports/markdown.py`, `report.py`, `ui/research_tab.py` | `test_m4_flow.py::test_partial_run_uses_partial_names_header_and_tags`, `::test_missing_report_is_failed_no_report_without_files`, `::test_revalidation_is_deterministic_and_has_no_override`, `test_exports.py::test_partial_report_never_written_as_validated_name` | **Done (M4)**; deck refusal for partial reports is M6 |
-| SA-01 | Hierarchical + Manager | — | — | Not started (M5) |
-| SA-02 | Mode selector in Research Workspace | `ui/research_tab.py` | `test_ui_structure.py::test_selector_in_research_tab` | Partial (placement only; wired in M5) |
+| SA-01 | Hierarchical + Manager | `launchscout/crew.py`, `agents.py`, `runner.py`, `ui/workflow.py` | `tests/test_hierarchical.py` (26), `test_crew_structure.py` | **Implemented and verified offline (M5)**; live delegation not yet measured |
+| SA-02 | Mode selector in Research Workspace | `ui/research_tab.py` | `test_ui_structure.py::test_selector_in_research_tab`, `test_hierarchical.py::test_selecting_hierarchical_renders_manager_and_runs_through_cockpit` | **Done (M5)** |
+| SA-03 | Manager guards: budgets, delegation cap, undelegated-task guard, cancellation | `events.py`, `runner.py`, `crew.py` | `test_hierarchical.py` | **Done offline (M5)** |
+| SA-04 | Sequential vs hierarchical comparison from recorded runs | `launchscout/comparison.py`, `ui/cockpit.py` | `test_hierarchical.py::test_comparison_*` | **Done (M5)**; hierarchical column is Not yet measured until a live run |
+| E-11 | Remaining tool budgets exposed to agents | `tools.py`, `tasks.py` | `test_hierarchical.py::test_budgets_are_stated_in_prompts_and_tool_results` | **Done (M5)**; effect on refusals to be measured live |
 | SB-01..SB-03 | Deck agent, PPTX, claim validation | — | — | Not started (M6) |
 | SB-04 | Deck tab disabled without report | `ui/deck_tab.py` | `test_ui_structure.py::test_deck_tab_disabled_without_report` | Partial (partial-report refusal in M6) |
 | SC-01..SC-07 | Weekly tracking | `ui/weekly_tab.py` (placeholder) | — | Not started (M7) |
@@ -43,3 +46,5 @@ Counts: Done 4 · Partial 6 · Not started remainder · Blocked: live gates (TD-
 
 ## Acceptance criteria (INITIAL.md section 10)
 Not marked complete. Live runs L1-L4 (see `BUILD_LOG.md`) exercised the sequential crew; acceptance validation and exports are M4.
+
+- SA-02/SA-03 live check: executed once as L6 (hierarchical delegation worked, 4 delegations, all tasks completed, limits respected); research acceptance still not met in either mode.

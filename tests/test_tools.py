@@ -41,7 +41,9 @@ def make_ctx(tmp_path, search=None, scrape=None, limits=None, write=None):
 def test_search_records_ledger_and_wraps_untrusted(tmp_path):
     ctx, _ = make_ctx(tmp_path)
     out = ctx.search("millet boxes")
-    assert out.startswith(UNTRUSTED_OPEN) and out.rstrip().endswith(UNTRUSTED_CLOSE)
+    assert out.startswith(UNTRUSTED_OPEN) and UNTRUSTED_CLOSE in out
+    # the trusted budget note sits outside the untrusted envelope
+    assert out.index(UNTRUSTED_CLOSE) < out.index("[Budget remaining")
     assert ctx.ledger.contains("https://a.example/x")
     assert ctx.counters()["serper_calls"] == 1
 

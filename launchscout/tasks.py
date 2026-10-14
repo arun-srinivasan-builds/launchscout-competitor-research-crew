@@ -9,6 +9,7 @@ from typing import Any
 from crewai import Agent, Task
 
 from launchscout.agents import ROLE_MARKET, ROLE_REVIEWS, ROLE_STRATEGY, ROLE_WRITER
+from launchscout.config import RunLimits
 from launchscout.schemas import ResearchInput
 
 TASK_RESEARCH = "Competitor research"
@@ -48,6 +49,7 @@ def build_tasks(
     research_input: ResearchInput,
     today: date,
     callback_factory: Callable[[str], Callable[[Any], None]] | None = None,
+    limits: RunLimits | None = None,
 ) -> list[Task]:
     """Four tasks, in order. Context passes each output to every later task that needs it."""
     idea = _clean(research_input.idea)
@@ -55,6 +57,13 @@ def build_tasks(
     customer = _clean(research_input.target_customer)
     seeds = ", ".join(_clean(c) for c in research_input.known_competitors) or "none supplied"
     day = today.isoformat()
+    limits = limits or RunLimits()
+    budget = (
+        f" Tool budget for you: at most {limits.searches_per_agent} searches and "
+        f"{limits.scrapes_per_agent} page reads in total; each tool result states what "
+        "remains. Plan queries and batch calls; once a budget is spent, stop calling "
+        "that tool and mark the remaining facts unknown."
+    )
 
     def cb(name: str) -> Callable[[Any], None] | None:
         return callback_factory(name) if callback_factory else None
@@ -72,11 +81,10 @@ def build_tasks(
             "Every competitor needs at least one evidence URL that appeared in a tool result. "
             "Use as few tool calls as you can; the number of searches is capped. If fewer "
             "than 3 competitors have public evidence, return what you found and explain why "
-            "in shortfall_reason. Do not invent anything."
+            "in shortfall_reason. Do not invent anything." + budget
         ),
         expected_output=(
-            "ONLY a JSON object (no prose, no code fence) with this shape: "
-            + _COMPETITOR_SCHEMA
+            "ONLY a JSON object (no prose, no code fence) with this shape: " + _COMPETITOR_SCHEMA
         ),
         agent=agents[ROLE_MARKET],
         callback=cb(TASK_RESEARCH),
@@ -88,8 +96,7 @@ def build_tasks(
             "customer praise and complaints for each (reviews, ratings pages, social posts, "
             "articles). Quote or summarise only text you actually retrieved and give its "
             "source_url; label anything you infer as 'inferred' with no source. List "
-            "competitors or topics you could not find feedback for under 'gaps'. The number "
-            "of searches and page reads is capped; spend them wisely."
+            "competitors or topics you could not find feedback for under 'gaps'." + budget
         ),
         expected_output=(
             "ONLY a JSON object (no prose, no code fence) with this shape: " + _REVIEW_SCHEMA

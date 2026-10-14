@@ -1,7 +1,6 @@
 """Research Intelligence Cockpit prototype: deterministic, read-only, zero-call."""
 
 import hashlib
-import time
 from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
@@ -11,7 +10,13 @@ from launchscout.runner import set_manager
 from launchscout.saved_runs import load_saved_snapshot
 from launchscout.schemas import ResearchInput
 from tests.conftest import make_manager
-from tests.helpers import MENU_URLS, PARTIAL_REPORT_MD, PASS_REPORT_MD, make_executor
+from tests.helpers import (
+    MENU_URLS,
+    PARTIAL_REPORT_MD,
+    PASS_REPORT_MD,
+    make_executor,
+    wait_finished,
+)
 from ui import cockpit
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -24,14 +29,7 @@ INPUT = ResearchInput(
 def _make_run(tmp_path, **kwargs):
     manager = make_manager(tmp_path, executor=make_executor(**kwargs))
     run = manager.start(INPUT)
-    end = time.time() + 10
-    while time.time() < end:
-        snap = manager.snapshot(run.paths.run_id)
-        if snap and not snap.active:
-            break
-        time.sleep(0.02)
-    while manager.active_run() is not None and time.time() < end:
-        time.sleep(0.02)
+    wait_finished(manager, run)
     return run
 
 
@@ -190,7 +188,7 @@ def test_prototype_is_read_only_and_makes_zero_calls(tmp_path, monkeypatch):
     monkeypatch.setattr("crewai.LLM.call", trap("LLM.call"))
     monkeypatch.setattr("launchscout.tools._default_search", trap("serper"))
     monkeypatch.setattr("launchscout.tools._default_scrape", trap("scrape"))
-    monkeypatch.setattr("launchscout.runner.run_sequential", trap("crew"))
+    monkeypatch.setattr("launchscout.runner.run_crew", trap("crew"))
 
     at = _proto(tmp_path, run)
     for area in cockpit.AREAS:

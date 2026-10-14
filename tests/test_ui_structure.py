@@ -70,11 +70,12 @@ def test_workflow_area_is_idle_and_not_simulated():
 
 def test_manager_shown_only_in_hierarchical_mode():
     at = _app()
-    assert "Manager agent" not in _all_markdown(at)
+    assert "Research Manager" not in _all_markdown(at)
     at.radio(key="research_mode").set_value("hierarchical").run()
     assert not at.exception
-    assert "Manager agent" in _all_markdown(at)
-    assert "Not yet implemented" in _all_markdown(at)
+    text = _all_markdown(at)
+    assert "Research Manager" in text and "No delegation recorded" in text
+    assert "Not yet implemented (M5)" not in text  # the Manager is real in M5
 
 
 def test_behind_the_scenes_expander_present_and_empty():

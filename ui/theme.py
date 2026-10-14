@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from ui.chrome import logo_html
+
 TAB_LABELS: tuple[str, str, str] = ("Research Workspace", "Pitch Deck", "Weekly Tracking")
 
 PALETTE = {
@@ -60,6 +62,19 @@ html, body, .stApp {
 header[data-testid="stHeader"] { background: transparent; }
 .block-container { max-width: min(1480px, 100%); padding: 1.75rem 2rem 3rem 2rem; }
 
+/* Floating Back to top (created once by ui/assets/back_to_top.js) */
+.ls-top {
+  position: fixed; right: 1rem; bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  z-index: 1000; width: 44px; height: 44px; padding: 0; display: grid; place-items: center;
+  border-radius: 12px; border: 1.5px solid var(--ls-teal); background: var(--ls-base);
+  color: var(--ls-teal); cursor: pointer; box-shadow: 0 2px 10px rgba(5, 12, 28, 0.6);
+  visibility: hidden; opacity: 0; transition: opacity .18s ease, visibility .18s ease;
+}
+.ls-top.ls-top-show { visibility: visible; opacity: 1; }
+.ls-top:hover { background: var(--ls-surface); }
+.ls-top:focus-visible { outline: 3px solid var(--ls-teal); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .ls-top { transition: none; } }
+
 /* Header band */
 .ls-hero {
   display: flex; align-items: center; gap: 1.1rem; padding: 1.1rem 1.5rem; margin-bottom: 1.25rem;
@@ -67,12 +82,12 @@ header[data-testid="stHeader"] { background: transparent; }
   border: 1px solid var(--ls-border); border-radius: var(--ls-radius);
   box-shadow: 0 0 24px rgba(56, 189, 248, 0.08);
 }
-.ls-logo {
-  flex: none; width: 3rem; height: 3rem; border-radius: 12px; display: grid; place-items: center;
-  font-size: 1.5rem; font-weight: 800; color: var(--ls-base);
-  background: linear-gradient(135deg, var(--ls-teal), var(--ls-blue) 60%, var(--ls-purple));
-  box-shadow: 0 0 18px rgba(45, 212, 191, 0.45);
+/* LS artwork on a plain soft-white tile; the tile is the 44px (40px on phones) element */
+.ls-logo-tile {
+  flex: none; display: grid; place-items: center; height: 2.75rem; box-sizing: border-box;
+  padding: .25rem .5rem; border-radius: 8px; background: #F7F9FB;
 }
+.ls-logo-img { height: 2.25rem; width: auto; display: block; }
 .ls-hero-text { min-width: 0; }
 .ls-hero h1 {
   font-size: 1.9rem; font-weight: 800; letter-spacing: .02em; margin: 0; padding: 0;
@@ -143,27 +158,58 @@ div[data-testid="stCaptionContainer"], div[data-testid="stCaptionContainer"] p {
     #07112A;
 }
 .ls-flow {
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: 1.1rem;
+  --ls-gap: 1.1rem;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: var(--ls-gap);
   align-items: stretch;
 }
 .ls-manager-node {
-  grid-row: 1; grid-column: 1 / -1; justify-self: center; width: min(420px, 100%);
-  box-sizing: border-box; margin-bottom: 1.4rem; padding: .9rem 1rem; border-radius: var(--ls-radius);
+  grid-row: 1; grid-column: 1 / -1; justify-self: center; width: min(560px, 100%);
+  box-sizing: border-box; margin-bottom: .2rem; padding: .9rem 1rem; border-radius: var(--ls-radius);
   border: 1.5px solid var(--ls-purple); background: rgba(139, 92, 246, 0.10);
   box-shadow: 0 0 18px rgba(139, 92, 246, 0.35);
 }
 .ls-manager-node .ls-glyph { color: var(--ls-purple); border-color: var(--ls-purple); }
 .ls-manager-node .ls-node-status { color: var(--ls-muted); }
+.ls-manager-node.ls-st-active .ls-node-status,
+.ls-manager-node.ls-st-complete .ls-node-status { color: #C4B5FD; }
 .ls-manager-node .ls-chip { margin-top: .5rem; }
+.ls-manager-node .ls-task { margin: .55rem 0; }
+.ls-mgr-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; margin-top: .55rem; }
+/* delegation lines: Manager bus to each specialist (dashed, distinct from the flow arcs) */
+.ls-mgr-links {
+  grid-row: 2; grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  column-gap: var(--ls-gap, 1.1rem); position: relative; height: 34px; margin-top: 14px;
+}
+.ls-mgr-links::before {
+  content: ""; position: absolute; left: 50%; top: -14px; height: 14px; width: 0;
+  border-left: 2px dashed var(--ls-purple); margin-left: -1px;
+}
+.ls-drop { position: relative; }
+.ls-drop::before {
+  content: ""; position: absolute; top: 0; left: 0; right: calc(-1 * var(--ls-gap, 1.1rem));
+  border-top: 2px dashed var(--ls-purple);
+}
+.ls-drop:nth-child(1)::before { left: 22%; }
+.ls-drop:nth-child(4)::before { right: 78%; }
+.ls-drop::after {
+  content: ""; position: absolute; left: 22%; top: 0; bottom: 6px; width: 0; margin-left: -1px;
+  border-left: 2px dashed var(--ls-purple);
+}
+.ls-drop i {
+  position: absolute; left: 22%; bottom: 0; margin-left: -6px; width: 0; height: 0;
+  border-left: 6px solid transparent; border-right: 6px solid transparent;
+  border-top: 8px solid var(--ls-purple);
+}
+.ls-vlink-mgr { display: none; }
 .ls-arc { height: 46px; box-sizing: border-box; position: relative; }
 .ls-arc-top {
-  grid-row: 2; align-self: end; margin: 0 25%; border: 3px solid; border-bottom: 0;
+  grid-row: 3; align-self: end; margin: 0 25%; border: 3px solid; border-bottom: 0;
   border-radius: 28px 28px 0 0;
   border-color: var(--ls-purple) var(--ls-purple) transparent var(--ls-blue);
   box-shadow: 0 -4px 14px rgba(139, 92, 246, 0.35);
 }
 .ls-arc-bottom {
-  grid-row: 4; align-self: start; margin: 0 25%; border: 3px solid; border-top: 0;
+  grid-row: 5; align-self: start; margin: 0 25%; border: 3px solid; border-top: 0;
   border-radius: 0 0 28px 28px;
   border-color: transparent var(--ls-purple) var(--ls-blue) var(--ls-blue);
   box-shadow: 0 4px 14px rgba(56, 189, 248, 0.35);
@@ -187,7 +233,7 @@ div[data-testid="stCaptionContainer"], div[data-testid="stCaptionContainer"] p {
 
 /* Agent nodes */
 .ls-node {
-  grid-row: 3; display: flex; flex-direction: column; gap: .7rem; box-sizing: border-box;
+  grid-row: 4; display: flex; flex-direction: column; gap: .7rem; box-sizing: border-box;
   padding: .9rem; border-radius: var(--ls-radius); min-height: 24rem;
   border: 1.5px solid var(--ls-accent);
   background: linear-gradient(180deg, var(--ls-tint), #0A1429 55%);
@@ -319,12 +365,13 @@ div[data-testid="stExpander"] {
 @media (max-width: 1100px) {
   .block-container { padding-left: 1.25rem; padding-right: 1.25rem; }
   .ls-canvas { padding: 1.1rem 1rem .6rem 1rem; }
-  .ls-flow { column-gap: .75rem; }
+  .ls-flow { --ls-gap: .75rem; }
   .ls-node { padding: .7rem; }
 }
 @media (max-width: 820px) {
   .ls-flow { grid-template-columns: minmax(0, 1fr); width: min(560px, 100%); margin: 0 auto; }
-  .ls-arc { display: none; }
+  .ls-arc, .ls-mgr-links { display: none; }
+  .ls-mgr-cols { grid-template-columns: minmax(0, 1fr); }
   .ls-node, .ls-a1, .ls-a2, .ls-a3, .ls-a4, .ls-manager-node { grid-row: auto; grid-column: 1; }
   .ls-node { min-height: 0; }
   .ls-node-name { min-height: 0; }
@@ -347,7 +394,8 @@ div[data-testid="stExpander"] {
   .block-container { padding-left: .75rem; padding-right: .75rem; padding-top: .75rem; }
   .ls-hero { padding: .9rem 1rem; gap: .8rem; }
   .ls-hero h1 { font-size: 1.5rem; }
-  .ls-logo { width: 2.5rem; height: 2.5rem; font-size: 1.25rem; }
+  .ls-logo-tile { height: 2.5rem; padding: .25rem .45rem; }
+  .ls-logo-img { height: 2rem; }
   button[role="tab"] { padding: .6rem .7rem; }
   button[role="tab"] p { font-size: 1rem; }
   .ls-canvas { padding: .8rem .6rem .5rem .6rem; }
@@ -561,7 +609,7 @@ def hero(title: str, subtitle: str, tagline: str = "") -> None:
     """Brand band: logo mark, product title, subtitle and tagline."""
     tag = f'<div class="ls-hero-tag">{tagline}</div>' if tagline else ""
     st.markdown(
-        '<div class="ls-hero"><div class="ls-logo">L</div><div class="ls-hero-text">'
+        f'<div class="ls-hero">{logo_html()}<div class="ls-hero-text">'
         f'<h1>{title}</h1><div class="ls-hero-sub">{subtitle}</div>{tag}</div></div>',
         unsafe_allow_html=True,
     )
