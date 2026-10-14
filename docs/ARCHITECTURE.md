@@ -67,3 +67,6 @@ saved run files -> `deck.load_deck_source` -> `deck_prompt` (facts only) -> Pitc
 
 ### Deck rendering (V2)
 `pptx_components` (primitives, fit-to-box, palette) -> `pptx_builder` (chrome + six layouts from `DeckSource` and `DeckSpec`; `check_text_bounds`, `layout_utilization`). Visual facts (counts, competitor rows, evidence coverage, gaps, price parts, weeks) come from the saved run; the validated spec supplies slide titles, notes, labels and launch-plan weeks.
+
+### Workflow motion and replay
+`progress.reduce_events` -> `AgentState` (incl. `delegations`, `delegated`) -> `progress.active_links` -> `ui.workflow.render_workflow_html(..., links)` (adds `ls-live`). Replay: `progress.replay_states(events[:N])` driven by session state in `ui/research_tab.py`; read-only on saved events.

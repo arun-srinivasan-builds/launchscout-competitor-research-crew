@@ -8,9 +8,12 @@ and widget edits never interrupt it.
 
 from __future__ import annotations
 
+import html
+
 import streamlit as st
 
 from launchscout.inputs import InputValidationError, validate_input
+from launchscout.progress import active_links, replay_states
 from launchscout.runner import RunManager, RunSnapshot, get_manager
 from launchscout.saved_runs import (
     LABEL_TEXT,
@@ -33,6 +36,10 @@ SESSION_RUN_KEY = "active_run_id"
 SAVED_SELECT_KEY = "saved_run_select"
 RESET_SAVED_KEY = "reset_saved_select"
 REUSE_KEY = "reuse_input"
+REPLAY_RUN_KEY = "replay_run"
+REPLAY_POS_KEY = "replay_pos"
+REPLAY_PLAYING_KEY = "replay_playing"
+REPLAY_SECONDS = 0.6  # accelerated: one recorded event per tick
 
 
 def _snapshot(manager: RunManager, run_id: str | None) -> RunSnapshot | None:
@@ -71,15 +78,135 @@ def _workflow_status_text(snap: RunSnapshot | None) -> str:
 def _render_canvas(snap: RunSnapshot | None, selected_mode: ResearchMode) -> None:
     mode = snap.mode if snap is not None else selected_mode
     states = snap.agent_states() if snap is not None else None
+    hierarchical = mode is ResearchMode.HIERARCHICAL
     section("Live Agent Workflow", _workflow_caption(snap))
     st.markdown(
-        render_workflow_html(mode, states, _workflow_status_text(snap)),
+        render_workflow_html(
+            mode, states, _workflow_status_text(snap), active_links(states, hierarchical)
+        ),
         unsafe_allow_html=True,
+    )
+
+
+# ---- recorded-event replay (offline: reads saved events only, never runs anything) -------
+
+
+def _replay_init(snap: RunSnapshot) -> None:
+    if st.session_state.get(REPLAY_RUN_KEY) != snap.run_id:
+        st.session_state[REPLAY_RUN_KEY] = snap.run_id
+        st.session_state[REPLAY_POS_KEY] = len(snap.events)  # default: the final saved state
+        st.session_state[REPLAY_PLAYING_KEY] = False
+
+
+def _replay_restart() -> None:
+    st.session_state[REPLAY_POS_KEY] = 0
+    st.session_state[REPLAY_PLAYING_KEY] = False
+
+
+def _replay_step(delta: int, total: int) -> None:
+    pos = st.session_state.get(REPLAY_POS_KEY, total)
+    st.session_state[REPLAY_POS_KEY] = max(0, min(total, pos + delta))
+    st.session_state[REPLAY_PLAYING_KEY] = False
+
+
+def _replay_toggle(total: int) -> None:
+    if st.session_state.get(REPLAY_PLAYING_KEY):
+        st.session_state[REPLAY_PLAYING_KEY] = False
+        return
+    if st.session_state.get(REPLAY_POS_KEY, total) >= total:
+        st.session_state[REPLAY_POS_KEY] = 0  # play from the start after the end was reached
+    st.session_state[REPLAY_PLAYING_KEY] = True
+
+
+def _event_line(snap: RunSnapshot, pos: int) -> str:
+    total = len(snap.events)
+    if pos <= 0:
+        return f"Event 0 / {total}: before the first recorded event."
+    event = snap.events[pos - 1]
+    stamp = event.ts.astimezone().strftime("%H:%M:%S")
+    who = event.agent or "run"
+    return f"Event {pos} / {total} · {stamp} · {event.kind} · {who}: {event.summary}"
+
+
+def _replay_workflow(snap: RunSnapshot) -> None:
+    total = len(snap.events)
+    _replay_init(snap)
+    playing = bool(st.session_state.get(REPLAY_PLAYING_KEY))
+    hierarchical = snap.mode is ResearchMode.HIERARCHICAL
+
+    @st.fragment(run_every=REPLAY_SECONDS if playing else None)
+    def _panel() -> None:
+        if bool(st.session_state.get(REPLAY_PLAYING_KEY)) != playing:
+            st.rerun()  # play/pause toggled inside the fragment: re-arm its timer (full rerun)
+        pos = int(st.session_state.get(REPLAY_POS_KEY, total))
+        if st.session_state.get(REPLAY_PLAYING_KEY):
+            pos = min(total, pos + 1)
+            st.session_state[REPLAY_POS_KEY] = pos
+            if pos >= total:
+                st.session_state[REPLAY_PLAYING_KEY] = False
+                st.rerun()  # leave play mode: the timer must stop and Play re-enables
+        states = replay_states(snap.events, pos, hierarchical)
+        links = active_links(states, hierarchical)
+        section("Live Agent Workflow", _replay_caption(snap, pos))
+        status = (
+            _workflow_status_text(snap)
+            if pos >= total
+            else f"Replay: {pos} of {total} recorded events applied."
+        )
+        st.markdown(render_workflow_html(snap.mode, states, status, links), unsafe_allow_html=True)
+        cols = st.columns(5)
+        running = bool(st.session_state.get(REPLAY_PLAYING_KEY))
+        cols[0].button(
+            "Restart", key="replay_restart", on_click=_replay_restart, use_container_width=True
+        )
+        cols[1].button(
+            "Step back",
+            key="replay_back",
+            on_click=_replay_step,
+            args=(-1, total),
+            disabled=running or pos <= 0,
+            use_container_width=True,
+        )
+        cols[2].button(
+            "Pause" if running else "Play",
+            key="replay_play",
+            on_click=_replay_toggle,
+            args=(total,),
+            type="primary",
+            use_container_width=True,
+        )
+        cols[3].button(
+            "Step forward",
+            key="replay_forward",
+            on_click=_replay_step,
+            args=(1, total),
+            disabled=running or pos >= total,
+            use_container_width=True,
+        )
+        cols[4].caption(f"Position {pos} / {total}")
+        st.markdown(
+            f'<div class="ls-replay-caption">{html.escape(_event_line(snap, pos))}</div>',
+            unsafe_allow_html=True,
+        )
+
+    _panel()
+
+
+def _replay_caption(snap: RunSnapshot, pos: int) -> str:
+    if pos >= len(snap.events):
+        return _workflow_caption(snap)
+    return (
+        "Replay of the recorded execution, accelerated for demonstration. Nothing is "
+        "running: no model, search or research call is made."
     )
 
 
 def _live_workflow(run_id: str | None, selected_mode: ResearchMode) -> None:
     manager = get_manager()
+    shown = _snapshot(manager, run_id)
+    if shown is not None and not shown.active and shown.events:
+        _replay_workflow(shown)  # finished or saved run: the workflow can be replayed offline
+        return
     initial = manager.snapshot(run_id) if run_id else None
     was_active = initial is not None and initial.active
 

@@ -65,3 +65,7 @@ Not marked complete. Live runs L1-L4 (see `BUILD_LOG.md`) exercised the sequenti
 
 | SB-09 | Enterprise infographic deck: dashboard, matrix, evidence grid, flow, pricing dashboard, roadmap; logo on every slide | `tests/test_deck.py::test_every_slide_has_logo_status_footer_and_native_shapes`, `::test_visual_components_present_and_editable`, `::test_layout_adapts_to_competitor_count`, `::test_layout_has_no_overflow_collisions_or_footer_hits`, `::test_space_utilisation_is_high_on_every_slide` | Offline pass; real-render check pending |
 | SB-10 | Layout engine not hardcoded to one idea | `::test_layout_engine_is_not_hardcoded_to_one_idea` | Offline pass |
+
+| WF-01 | Connector animation driven by recorded transitions/delegations; none when idle/finished; reduced motion | `tests/test_workflow_motion.py::test_sequential_connector_follows_recorded_task_transitions`, `::test_manager_links_are_driven_only_by_recorded_delegations`, `::test_idle_and_finished_workflows_have_no_moving_connector`, `::test_reduced_motion_disables_every_animation` | Pass; browser-verified once (headless Edge) |
+| WF-02 | All Manager delegations visible in recorded order | `::test_all_delegations_are_listed_in_recorded_order_and_kept_apart`, `::test_saved_l6_shows_all_four_recorded_delegations` | Pass |
+| WF-03 | Offline replay (play/pause/restart/step), same final state as saved view, zero calls | `::test_replay_preserves_event_order_and_is_monotonic`, `::test_replay_final_state_equals_saved_run_view`, `::test_replay_controls_step_play_restart_with_zero_calls` | Pass |

@@ -11,7 +11,7 @@ import html
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from launchscout.progress import AgentState, AgentStatus
+from launchscout.progress import AgentState, AgentStatus, delegate_link_id
 from launchscout.schemas import ResearchMode
 
 __all__ = ["AGENTS", "AgentState", "AgentStatus", "render_workflow_html"]
@@ -60,6 +60,13 @@ AGENTS: tuple[AgentNode, ...] = (
         "Sourced report",
         "&#9998;",
     ),
+)
+
+LIVE = " ls-live"  # modifier: this connector's endpoints are in a recorded transition
+VIEW_NOTE = (
+    "Agent status and delegations come from recorded CrewAI events. Connector animation "
+    "visualizes task transitions; it does not represent direct agent messages unless such "
+    "messages were recorded."
 )
 
 _STATUS_CLASS = {
@@ -118,15 +125,23 @@ def _card(index: int, node: AgentNode, state: AgentState) -> str:
     )
 
 
-def _manager(state: AgentState) -> str:
-    """Manager node (hierarchical mode): real delegation and review events, never simulated."""
+def _manager(state: AgentState, links: frozenset[str] = frozenset()) -> str:
+    """Manager node (hierarchical mode): real delegation and review events, never simulated.
+
+    Delegations are listed in recorded order and are kept apart from other tool calls.
+    """
     delegations = (
-        "".join(f"<li>{_esc(c)}</li>" for c in state.tool_calls)
+        "".join(f"<li>{_esc(c)}</li>" for c in state.delegations)
         or '<li class="ls-none">No delegation recorded</li>'
     )
-    events = (
-        "".join(f"<li>{_esc(e)}</li>" for e in state.events)
-        or '<li class="ls-none">No events received</li>'
+    other = [*state.events, *(f"Tool: {c}" for c in state.tool_calls)]
+    events = "".join(f"<li>{_esc(e)}</li>" for e in other) or (
+        '<li class="ls-none">No events received</li>'
+    )
+    drops = "".join(
+        f'<div class="ls-drop{LIVE if delegate_link_id(i) in links else ""}"'
+        f' data-link="{delegate_link_id(i)}"><i></i></div>'
+        for i in range(1, 5)
     )
     return (
         f'<div class="ls-manager-node {_STATUS_CLASS[state.status]}" id="ls-agent-manager" '
@@ -138,12 +153,11 @@ def _manager(state: AgentState) -> str:
         '<div class="ls-panel-text">Delegates to and reviews the four specialists; does no '
         "research and writes no report itself.</div>"
         '<div class="ls-mgr-cols"><div class="ls-panel"><div class="ls-panel-title">'
-        f'Delegations</div><ul class="ls-events">{delegations}</ul></div>'
+        f'Delegations</div><ol class="ls-events ls-deleg">{delegations}</ol></div>'
         '<div class="ls-panel"><div class="ls-panel-title">Manager events</div>'
         f'<ul class="ls-events">{events}</ul></div></div></div>'
-        '<div class="ls-mgr-links" aria-hidden="true">'
-        + '<div class="ls-drop"><i></i></div>' * 4
-        + '</div><div class="ls-vlink ls-vlink-mgr"></div>'
+        f'<div class="ls-mgr-links" aria-hidden="true">{drops}</div>'
+        '<div class="ls-vlink ls-vlink-mgr"></div>'
     )
 
 
@@ -151,25 +165,34 @@ def render_workflow_html(
     mode: ResearchMode,
     states: Mapping[str, AgentState] | None = None,
     status_text: str = "All agents idle. No run has been executed.",
+    links: frozenset[str] = frozenset(),
 ) -> str:
     """Return the connected-node canvas as one HTML string (no blank lines, no indentation)."""
     states = states or {}
     parts = ['<div class="ls-canvas" role="group" aria-label="Live Agent Workflow">']
     parts.append('<div class="ls-flow">')
     if mode is ResearchMode.HIERARCHICAL:
-        parts.append(_manager(states.get("manager", AgentState())))
-    parts.append('<div class="ls-arc ls-arc-top ls-arc-12"></div>')
-    parts.append('<div class="ls-arc ls-arc-bottom ls-arc-23"></div>')
-    parts.append('<div class="ls-arc ls-arc-top ls-arc-34"></div>')
+        parts.append(_manager(states.get("manager", AgentState()), links))
+    for cls, link_id in (
+        ("ls-arc-top ls-arc-12", "flow-1-2"),
+        ("ls-arc-bottom ls-arc-23", "flow-2-3"),
+        ("ls-arc-top ls-arc-34", "flow-3-4"),
+    ):
+        live = LIVE if link_id in links else ""
+        parts.append(f'<div class="ls-arc {cls}{live}" data-link="{link_id}"></div>')
     for index, node in enumerate(AGENTS, start=1):
         parts.append(_card(index, node, states.get(node.key, AgentState())))
         if index < len(AGENTS):
-            parts.append('<div class="ls-vlink"></div>')
+            link_id = f"flow-{index}-{index + 1}"
+            live = LIVE if link_id in links else ""
+            parts.append(f'<div class="ls-vlink{live}" data-link="{link_id}"></div>')
     parts.append("</div>")
     mode_label = "Hierarchical" if mode is ResearchMode.HIERARCHICAL else "Sequential"
     parts.append(
         '<div class="ls-statusbar"><span><span class="ls-dot"></span>'
         f"{_esc(status_text)}</span>"
-        f"<span>Mode: {mode_label}</span></div></div>"
+        f"<span>Mode: {mode_label}</span></div>"
+        '<details class="ls-note"><summary>About this view</summary>'
+        f"<p>{_esc(VIEW_NOTE)}</p></details></div>"
     )
     return "".join(parts)

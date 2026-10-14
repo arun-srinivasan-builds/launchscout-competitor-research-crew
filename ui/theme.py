@@ -327,6 +327,48 @@ div[data-testid="stMarkdownContainer"] .ls-events li { margin: .15rem 0; font-si
   background: var(--ls-muted);
 }
 
+/* Connector motion: only connectors whose recorded state transition is happening carry
+   .ls-live (see launchscout/progress.active_links); idle and finished flows stay still. */
+.ls-arc-top::before, .ls-arc-bottom::before { opacity: .35; }
+.ls-arc.ls-live { box-shadow: 0 0 16px rgba(45, 212, 191, 0.55); }
+.ls-arc-top.ls-live { border-color: var(--ls-teal) var(--ls-teal) transparent var(--ls-teal); }
+.ls-arc-bottom.ls-live { border-color: transparent var(--ls-teal) var(--ls-teal) var(--ls-teal); }
+.ls-arc.ls-live::before {
+  opacity: 1; background: var(--ls-teal); box-shadow: 0 0 10px var(--ls-teal); bottom: auto;
+}
+.ls-arc-top.ls-live::before { animation: ls-run-top 1.9s linear infinite; }
+.ls-arc-bottom.ls-live::before { animation: ls-run-bottom 1.9s linear infinite; }
+@keyframes ls-run-top {
+  0% { left: -6px; top: calc(100% - 6px); }
+  14% { left: -6px; top: -6px; }
+  86% { left: calc(100% - 3px); top: -6px; }
+  100% { left: calc(100% - 3px); top: calc(100% - 6px); }
+}
+@keyframes ls-run-bottom {
+  0% { left: -6px; top: -3px; }
+  14% { left: -6px; top: calc(100% - 6px); }
+  86% { left: calc(100% - 3px); top: calc(100% - 6px); }
+  100% { left: calc(100% - 3px); top: -3px; }
+}
+.ls-drop.ls-live::before { border-top-color: var(--ls-teal); }
+.ls-drop.ls-live::after { border-left-color: var(--ls-teal); }
+.ls-drop.ls-live i { border-top-color: var(--ls-teal); animation: ls-drop-pulse 1.1s ease-in-out infinite; }
+@keyframes ls-drop-pulse {
+  0%, 100% { transform: translateY(0); opacity: .6; }
+  50% { transform: translateY(5px); opacity: 1; }
+}
+.ls-vlink.ls-live { background: linear-gradient(var(--ls-teal), var(--ls-blue), var(--ls-teal)); background-size: 100% 200%; animation: ls-vlink-run 1.2s linear infinite; }
+@keyframes ls-vlink-run { from { background-position: 0 0; } to { background-position: 0 200%; } }
+@media (prefers-reduced-motion: reduce) {
+  .ls-arc.ls-live::before, .ls-drop.ls-live i, .ls-vlink.ls-live { animation: none; }
+}
+.ls-deleg { margin: 0; padding-left: 1.2rem; }
+.ls-note { margin-top: .5rem; font-size: .85rem; color: var(--ls-muted); }
+.ls-note summary { cursor: pointer; width: fit-content; }
+.ls-note summary:focus-visible { outline: 3px solid var(--ls-teal); outline-offset: 2px; }
+.ls-note p { margin: .35rem 0 0 0; }
+.ls-replay-caption { font-size: .9rem; color: var(--ls-muted); }
+
 /* Two-panel layout: sticky control panel on wide desktops, stacked at 1200px and below */
 @media (min-width: 1201px) {
   .st-key-ls_left_panel { position: sticky; top: 1rem; }

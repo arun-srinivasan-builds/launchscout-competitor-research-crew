@@ -314,7 +314,10 @@ def test_reducer_manager_and_specialist_states_from_real_event_shapes():
     states = reduce_events(log, run_active=True, with_manager=True)
     assert states["market_researcher"].status is AgentStatus.COMPLETE
     assert states[MANAGER_KEY].status is AgentStatus.ACTIVE  # coordination continues
-    assert states[MANAGER_KEY].tool_calls and "Delegate" in states[MANAGER_KEY].tool_calls[0]
+    assert (
+        states[MANAGER_KEY].delegations
+        and "Delegated to Market Researcher" in (states[MANAGER_KEY].delegations[0])
+    )
     done = reduce_events([*log, ev("crew_completed", status="ok")], with_manager=True)
     assert done[MANAGER_KEY].status is AgentStatus.COMPLETE
     # sequential reduction has no manager entry at all

@@ -86,6 +86,10 @@ class AgentState:
     progress_percent: int | None = None  # None = no measured progress
     events: tuple[str, ...] = ()
     tool_calls: tuple[str, ...] = ()
+    # Manager only: every recorded delegation, in order (never capped, never reordered).
+    delegations: tuple[str, ...] = ()
+    # Specialist only: the Manager recorded a delegation to this agent.
+    delegated: bool = False
 
 
 # CrewAI reports tool names normalised to snake_case; accept either spelling.
@@ -98,6 +102,19 @@ _TOOL_LABELS = {
 }
 _MAX_EVENT_LINES = 3
 _MAX_TOOL_LINES = 3
+_MAX_DELEGATION_LINES = 12
+
+
+def delegation_target(summary: str) -> tuple[str | None, str]:
+    """(specialist role, task text) from a recorded delegation summary.
+
+    Recorded summaries read "<tool>: <Role>: <task>"; anything else yields (None, summary).
+    """
+    parts = summary.split(": ")
+    for index, part in enumerate(parts[1:], start=1):
+        if part.strip() in AGENT_KEYS:
+            return part.strip(), ": ".join(parts[index + 1 :])
+    return None, summary
 
 
 def _clock(ts: datetime) -> str:
@@ -118,6 +135,8 @@ def reduce_events(
     label = {key: ("Queued" if run_active else "Awaiting run") for key in keys}
     lines: dict[str, list[str]] = {key: [] for key in keys}
     calls: dict[str, list[str]] = {key: [] for key in keys}
+    delegations: list[str] = []
+    delegated: set[str] = set()
     run_state: str | None = None
     stopping = False  # cancel/timeout requested: later task/agent errors are the stop itself
 
@@ -146,7 +165,17 @@ def reduce_events(
             tool = str(event.data.get("tool", ""))
             normal = tool.lower().replace(" ", "_")
             label[key] = _TOOL_LABELS.get(normal, "Using a tool")
-            calls[key].append(f"{stamp} {event.summary}")
+            if is_manager and is_delegation_tool(tool):
+                role, task = delegation_target(event.summary)
+                if role is not None:
+                    delegated.add(AGENT_KEYS[role])
+                    delegations.append(
+                        f"{stamp} Delegated to {role}" + (f": {task}" if task else "")
+                    )
+                else:
+                    delegations.append(f"{stamp} {event.summary}")
+            else:
+                calls[key].append(f"{stamp} {event.summary}")
         elif event.kind == "tool_note" and event.data.get("outcome") in ("executed", "cache_hit"):
             pass  # measured per call (see metrics); not shown as a card line
         elif event.kind in ("tool_finished", "tool_error", "tool_note"):
@@ -196,9 +225,60 @@ def reduce_events(
             task_label=label[key],
             events=tuple(lines[key][-_MAX_EVENT_LINES:]),
             tool_calls=tuple(calls[key][-_MAX_TOOL_LINES:]),
+            delegations=tuple(delegations[-_MAX_DELEGATION_LINES:]) if key == MANAGER_KEY else (),
+            delegated=key in delegated,
         )
         for key in keys
     }
+
+
+# Sequential handoffs between neighbouring specialists (link ids are stable CSS hooks).
+FLOW_LINKS: tuple[tuple[str, str, str], ...] = tuple(
+    (f"flow-{i}-{i + 1}", AGENT_ORDER[i - 1], AGENT_ORDER[i]) for i in range(1, len(AGENT_ORDER))
+)
+
+
+def delegate_link_id(index: int) -> str:
+    return f"delegate-{index}"
+
+
+def active_links(
+    states: dict[str, AgentState] | None, with_manager: bool = False
+) -> frozenset[str]:
+    """Connectors that should show motion now, derived only from recorded state.
+
+    * `flow-i-j`: specialist i has completed its task and specialist j is active, i.e. the
+      recorded events establish the transition from i to j.
+    * `delegate-n`: the Manager recorded a delegation to specialist n, the Manager is active
+      and specialist n is active.
+    Idle, finished, cancelled and failed workflows have no active link.
+    """
+    if not states:
+        return frozenset()
+    out: set[str] = set()
+    for link_id, src, dst in FLOW_LINKS:
+        a, b = states.get(src), states.get(dst)
+        if a and b and a.status is AgentStatus.COMPLETE and b.status is AgentStatus.ACTIVE:
+            out.add(link_id)
+    manager = states.get(MANAGER_KEY)
+    if with_manager and manager is not None and manager.status is AgentStatus.ACTIVE:
+        for index, key in enumerate(AGENT_ORDER, start=1):
+            node = states.get(key)
+            if node and node.delegated and node.status is AgentStatus.ACTIVE:
+                out.add(delegate_link_id(index))
+    return frozenset(out)
+
+
+def replay_states(
+    events: list[RunEvent], position: int, with_manager: bool = False
+) -> dict[str, AgentState]:
+    """Workflow state after the first `position` recorded events (pure; no execution).
+
+    `position == len(events)` is the finished view and equals the saved-run view.
+    """
+    total = len(events)
+    position = max(0, min(position, total))
+    return reduce_events(events[:position], run_active=position < total, with_manager=with_manager)
 
 
 def agent_metrics(events: Iterable[RunEvent]) -> dict[str, dict[str, int | float]]:
