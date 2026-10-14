@@ -252,7 +252,12 @@ class ToolContext:
         text = " ".join(str(raw).split())[: self.limits.scrape_max_chars]
         self.ledger.add(
             EvidenceEntry(
-                url=url, kind="scraped", excerpt=text[:400], accessed_on=self.today, via="read"
+                url=url,
+                kind="scraped",
+                excerpt=text[:400],
+                text=text,
+                accessed_on=self.today,
+                via="read",
             )
         )
         out = (

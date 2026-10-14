@@ -42,6 +42,23 @@ class RunPaths(BaseModel):
         return self.root / "report.pdf"
 
     @property
+    def report_writer_md(self) -> Path:
+        """The Report Writer agent's original output, kept untouched."""
+        return self.root / "report.writer.md"
+
+    @property
+    def report_partial_md(self) -> Path:
+        return self.root / "report-PARTIAL.md"
+
+    @property
+    def report_partial_pdf(self) -> Path:
+        return self.root / "report-PARTIAL.pdf"
+
+    @property
+    def validation_json(self) -> Path:
+        return self.root / "validation.json"
+
+    @property
     def deck_pptx(self) -> Path:
         return self.root / "deck.pptx"
 

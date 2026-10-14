@@ -1,22 +1,27 @@
-"""Research Workspace tab: input panel, live agent workflow, results, Behind the Scenes.
+"""Research Workspace tab: input panel, live agent workflow, cockpit results.
 
 Flow: input -> Run Research -> live workflow (updates from real run events while the crew
-executes in the background) -> results -> Behind the Scenes. The run is owned by the
-process-wide `RunManager`, so reruns and widget edits never interrupt it.
+executes in the background) -> Research Intelligence Cockpit (`ui/cockpit.py`) for any finished
+run, live or reopened from disk. The run is owned by the process-wide `RunManager`, so reruns
+and widget edits never interrupt it.
 """
 
 from __future__ import annotations
 
-import html
-from datetime import datetime
-
 import streamlit as st
 
-from launchscout.config import load_settings
 from launchscout.inputs import InputValidationError, validate_input
 from launchscout.runner import RunManager, RunSnapshot, get_manager
+from launchscout.saved_runs import (
+    LABEL_TEXT,
+    SavedRunSummary,
+    find_matching_saved_run,
+    list_saved_runs,
+    load_saved_snapshot,
+)
 from launchscout.schemas import ResearchInput, ResearchMode
-from ui.theme import pill, section
+from ui import cockpit, trace
+from ui.theme import section
 from ui.workflow import render_workflow_html
 
 MODE_LABELS = {
@@ -25,21 +30,16 @@ MODE_LABELS = {
 }
 POLL_SECONDS = 1.5
 SESSION_RUN_KEY = "active_run_id"
+SAVED_SELECT_KEY = "saved_run_select"
+RESET_SAVED_KEY = "reset_saved_select"
 REUSE_KEY = "reuse_input"
-_MAX_TABLE_ROWS = 200
 
 
-def _esc(text: str) -> str:
-    return html.escape(text, quote=True)
-
-
-def _fmt_time(value: datetime | None) -> str:
-    return value.astimezone().strftime("%H:%M:%S") if value else "-"
-
-
-def _fmt_elapsed(seconds: float) -> str:
-    minutes, secs = divmod(int(seconds), 60)
-    return f"{minutes}m {secs:02d}s" if minutes else f"{secs}s"
+def _snapshot(manager: RunManager, run_id: str | None) -> RunSnapshot | None:
+    """In-memory run if the process owns it, else the saved run from disk (read-only)."""
+    if not run_id:
+        return None
+    return manager.snapshot(run_id) or load_saved_snapshot(manager.runs_dir(), run_id)
 
 
 # ---- live workflow ------------------------------------------------------------------------
@@ -62,9 +62,10 @@ def _workflow_status_text(snap: RunSnapshot | None) -> str:
     if snap is None:
         return "All agents idle. No run has been executed."
     done = len(snap.completed_tasks)
+    took = trace.fmt_elapsed(snap.elapsed_seconds())
     if snap.active:
-        return f"Running: {done}/4 tasks complete, {_fmt_elapsed(snap.elapsed_seconds())} elapsed."
-    return f"Run {snap.status}: {done}/4 tasks completed in {_fmt_elapsed(snap.elapsed_seconds())}."
+        return f"Running: {done}/4 tasks complete, {took} elapsed."
+    return f"Run {snap.status}: {done}/4 tasks completed in {took}."
 
 
 def _render_canvas(snap: RunSnapshot | None, selected_mode: ResearchMode) -> None:
@@ -84,7 +85,7 @@ def _live_workflow(run_id: str | None, selected_mode: ResearchMode) -> None:
 
     @st.fragment(run_every=POLL_SECONDS if was_active else None)
     def _panel() -> None:
-        snap = manager.snapshot(run_id) if run_id else None
+        snap = _snapshot(manager, run_id)
         _render_canvas(snap, selected_mode)
         if was_active and snap is not None and not snap.active:
             st.rerun()  # full rerun: show results and re-enable the form
@@ -92,254 +93,27 @@ def _live_workflow(run_id: str | None, selected_mode: ResearchMode) -> None:
     _panel()
 
 
-# ---- results ------------------------------------------------------------------------------
+# ---- engineering trace while idle or running ---------------------------------------------
 
 
-def _render_banner(snap: RunSnapshot) -> None:
-    if snap.status == "complete":
-        st.success(
-            "All four agents finished. This is an unvalidated draft: acceptance validation, "
-            "PDF and Markdown exports arrive in M4."
-        )
-    elif snap.status == "partial":
-        st.warning(
-            "Partial run: some tasks did not complete or their output could not be parsed. "
-            "Only what was actually produced is shown below."
-        )
-    elif snap.status == "cancelled":
-        st.warning("Run cancelled. Outputs from tasks completed before cancellation are shown.")
-    elif snap.status == "timeout":
-        st.error("Run timed out and was stopped. Outputs from completed tasks are shown.")
-    else:
-        st.error(f"Run failed: {snap.error or 'no usable output was produced'}.")
-
-
-def _render_results(snap: RunSnapshot) -> None:
-    section("Results", f"Run {snap.run_id}. Content comes only from tool-retrieved evidence.")
-    _render_banner(snap)
-    if snap.competitors and snap.competitors.competitors:
-        rows = [
-            {
-                "Competitor": c.name,
-                "Site": c.url,
-                "Offer": c.offer or "unknown",
-                "Price": (
-                    f"{c.price.amount} {c.price.currency} / {c.price.unit}"
-                    if c.price.status == "verified"
-                    else "unknown"
-                ),
-                "Evidence URLs": ", ".join(c.evidence_urls) or "none found",
-                "Flags": "; ".join(c.unknowns),
-            }
-            for c in snap.competitors.competitors
-        ]
-        st.markdown("**Competitors**")
-        st.dataframe(rows, hide_index=True, width="stretch")
-        if snap.competitors.shortfall_reason:
-            st.caption(f"Shortfall: {snap.competitors.shortfall_reason}")
-    elif "Competitor research" in snap.completed_tasks:
-        st.caption("Competitor output could not be parsed into a validated set.")
-    if snap.reviews and snap.reviews.findings:
-        st.markdown("**Customer feedback**")
-        st.dataframe(
-            [
-                {
-                    "Competitor": f.competitor,
-                    "Type": f.kind,
-                    "Basis": f.basis,
-                    "Text": f.text,
-                    "Source": f.source_url or "none",
-                }
-                for f in snap.reviews.findings
-            ],
-            hide_index=True,
-            width="stretch",
-        )
-    if snap.strategy and (snap.strategy.market_gap or snap.strategy.recommended_offer):
-        st.markdown("**Strategy (recommendation, not verified fact)**")
-        st.markdown(
-            f"- **Market gap:** {snap.strategy.market_gap or 'unknown'}\n"
-            f"- **Offer:** {snap.strategy.recommended_offer or 'unknown'}\n"
-            f"- **Positioning:** {snap.strategy.positioning_line or 'unknown'}\n"
-            f"- **Recommended price:** {snap.strategy.recommended_price or 'unknown'} "
-            "(Recommendation)"
-        )
-    if snap.report_markdown:
-        with st.expander("Draft report (unvalidated)", expanded=False):
-            if snap.unsupported_report_urls:
-                st.warning(
-                    f"{len(snap.unsupported_report_urls)} URL(s) in this draft were not returned "
-                    "by any tool and must be treated as unverified."
-                )
-            st.markdown(snap.report_markdown)
-
-
-# ---- Behind the Scenes --------------------------------------------------------------------
-
-
-def _render_bts_idle() -> None:
-    st.markdown(
-        '<div class="ls-caption">Execution details appear here for each run: active agent, '
-        "task status, tool calls, source retrieval, validation results, errors and retries, "
-        "measured usage and timestamps. No run has been executed, so there are no events "
-        "to show.</div>",
-        unsafe_allow_html=True,
-    )
-    rows = (
-        ("Run events", "None"),
-        ("Tool calls", "None"),
-        ("Validation and guardrail results", "Not evaluated"),
-        ("API usage", "Unavailable (nothing measured)"),
-    )
-    st.markdown(
-        "".join(
-            f'<div class="ls-row"><b>{_esc(label)}:</b> {_esc(value)}</div>'
-            for label, value in rows
-        ),
-        unsafe_allow_html=True,
-    )
-
-
-def _render_bts_run(snap: RunSnapshot) -> None:
-    usage = snap.usage
-    tool_events = [e for e in snap.events if e.kind == "tool_started"]
-    errors = [e for e in snap.events if e.status == "error"]
-    if usage.basis == "measured" and usage.total_tokens:
-        usage_text = (
-            f"{usage.total_tokens} tokens measured "
-            f"({usage.prompt_tokens} prompt + {usage.completion_tokens} completion)"
-        )
-    else:
-        usage_text = "Token usage unavailable (the provider reported none)"
-    summary = (
-        ("Run", snap.run_id),
-        ("Status", f"{snap.status} ({snap.phase})"),
-        ("Model", snap.model_name or "not set"),
-        ("Started", _fmt_time(snap.started_at)),
-        ("Elapsed", _fmt_elapsed(snap.elapsed_seconds())),
-        ("Events", str(len(snap.events))),
-        (
-            "Search calls / page reads / cache hits",
-            f"{usage.serper_calls} / {usage.scrape_calls} / {usage.cache_hits}",
-        ),
-        ("Model calls", str(usage.llm_calls if usage.llm_calls is not None else "unavailable")),
-        ("Tool calls recorded", str(len(tool_events))),
-        ("Errors", str(len(errors))),
-        ("Usage", usage_text),
-        ("Acceptance", "Not evaluated (validation arrives in M4)"),
-    )
-    st.markdown(
-        "".join(
-            f'<div class="ls-row"><b>{_esc(k)}:</b> {_esc(v)}</div>' for k, v in summary
-        ),
-        unsafe_allow_html=True,
-    )
-    metrics = snap.agent_metrics()
-    if any(m["llm_calls"] or m["tool_calls"] for m in metrics.values()):
-        st.markdown("**Per-agent efficiency (measured from events)**")
-        st.dataframe(
-            [
-                {
-                    "Agent": agent,
-                    "LLM calls": int(m["llm_calls"]),
-                    "Tokens": int(m["total_tokens"]) or "unavailable",
-                    "Tool calls": int(m["tool_calls"]),
-                    "Executed": int(m["executed"]),
-                    "Cache hits": int(m["cache_hits"]),
-                    "Refused (budget)": int(m["refused_budget"]),
-                    "Errors": int(m["tool_errors"]),
-                    "Task seconds": m["seconds"],
-                }
-                for agent, m in metrics.items()
-            ],
-            hide_index=True,
-            width="stretch",
-        )
-    if tool_events:
-        st.markdown("**Tool calls**")
-        st.dataframe(
-            [
-                {
-                    "Time": _fmt_time(e.ts),
-                    "Agent": e.agent or "",
-                    "Tool": str(e.data.get("tool", "")),
-                    "Input": str(e.data.get("arg", "")),
-                }
-                for e in tool_events[-_MAX_TABLE_ROWS:]
-            ],
-            hide_index=True,
-            width="stretch",
-        )
-    if snap.evidence:
-        st.markdown("**Evidence ledger (URLs returned by tools)**")
-        st.dataframe(
-            [
-                {
-                    "URL": e.url,
-                    "Kind": e.kind,
-                    "Status": e.status,
-                    "Accessed": e.accessed_on.isoformat(),
-                    "Found via": e.via,
-                }
-                for e in snap.evidence[-_MAX_TABLE_ROWS:]
-            ],
-            hide_index=True,
-            width="stretch",
-        )
-    if snap.grounding_issues or snap.unsupported_report_urls:
-        st.markdown("**Guardrail findings**")
-        for issue in snap.grounding_issues:
-            st.markdown(f"- {issue}")
-        for url in snap.unsupported_report_urls:
-            st.markdown(f"- Report URL not returned by any tool: `{url}`")
-    if errors:
-        st.markdown("**Errors**")
-        for event in errors[-20:]:
-            st.markdown(f"- {_fmt_time(event.ts)} {event.agent or 'run'}: {event.summary}")
-    if snap.events:
-        st.markdown("**Event log**")
-        st.dataframe(
-            [
-                {
-                    "Time": _fmt_time(e.ts),
-                    "Agent": e.agent or "",
-                    "Event": e.kind,
-                    "Detail": e.summary,
-                }
-                for e in snap.events[-_MAX_TABLE_ROWS:]
-            ],
-            hide_index=True,
-            width="stretch",
-        )
-
-
-def _render_bts(snap: RunSnapshot | None) -> None:
-    settings = load_settings()
-    with st.expander("Behind the Scenes", expanded=False):
+def _render_trace_panel(snap: RunSnapshot | None) -> None:
+    """Collapsed trace for the idle and running states (finished runs use the cockpit)."""
+    with st.expander("Engineering Trace", expanded=False):
         if snap is None:
-            _render_bts_idle()
+            trace.render_trace_idle()
         else:
-            _render_bts_run(snap)
-        st.markdown('<div class="ls-section">Environment</div>', unsafe_allow_html=True)
-        pills = "".join(
-            pill(f"{name}: {'set' if ok else 'missing'}", "ok" if ok else "warn")
-            for name, ok in settings.key_presence().items()
-        )
-        st.markdown(pills, unsafe_allow_html=True)
-        st.caption(
-            "Variable names only; values are never shown. Model availability is checked by "
-            "`python -m launchscout.model_check`."
-        )
+            trace.render_trace_run(snap)
+        trace.render_environment()
 
 
-def _live_bts(run_id: str | None) -> None:
+def _live_trace(run_id: str | None) -> None:
     manager = get_manager()
     initial = manager.snapshot(run_id) if run_id else None
     was_active = initial is not None and initial.active
 
     @st.fragment(run_every=POLL_SECONDS if was_active else None)
     def _panel() -> None:
-        _render_bts(manager.snapshot(run_id) if run_id else None)
+        _render_trace_panel(_snapshot(manager, run_id))
 
     _panel()
 
@@ -350,7 +124,9 @@ def _live_bts(run_id: str | None) -> None:
 Fields = tuple[str, str, str, str]
 
 
-def _render_input_panel(active: bool) -> tuple[ResearchMode, bool, bool, Fields]:
+def _render_input_panel(
+    active: bool,
+) -> tuple[ResearchMode, bool, bool, Fields]:
     """Left control panel: heading, then one card with fields, mode selector and buttons."""
     section("Describe the business idea", "Fields marked * are required.")
     with st.container(border=True, key="ls_left_card"):
@@ -383,6 +159,32 @@ def _render_input_panel(active: bool) -> tuple[ResearchMode, bool, bool, Fields]
     return mode, submitted, cancelled, (idea, city, customer, known)
 
 
+def _render_saved_selector(manager: RunManager, active: bool) -> str | None:
+    """Saved Research Runs: pick any run persisted under runs/. Read-only; no model, no search."""
+    live = manager.active_run()
+    runs = list_saved_runs(manager.runs_dir(), {live.paths.run_id} if live is not None else set())
+    if not runs:
+        st.caption("Saved research runs: none yet. Completed runs are kept under runs/.")
+        return None
+    by_id: dict[str, SavedRunSummary] = {r.run_id: r for r in runs}
+
+    def title(run_id: str) -> str:
+        return "Current session / latest run" if run_id == "" else by_id[run_id].title
+
+    choice = st.selectbox(
+        "Saved research runs",
+        options=[""] + [r.run_id for r in runs],
+        format_func=title,
+        key=SAVED_SELECT_KEY,
+        disabled=active,
+        help="Reopen any earlier run from disk. Viewing, switching and downloading make no "
+        "model calls, no searches and never start a research run.",
+    )
+    if active:
+        st.caption("Saved runs are available again when the current run ends.")
+    return choice or None
+
+
 def _handle_submit(mode: ResearchMode, fields: Fields, notices: list[tuple[str, str]]) -> None:
     idea, city, customer, known = fields
     try:
@@ -400,10 +202,13 @@ def _handle_submit(mode: ResearchMode, fields: Fields, notices: list[tuple[str, 
         )
         return
     manager = get_manager()
-    reusable = manager.find_reusable(research_input)
+    reusable = manager.find_reusable(research_input) or find_matching_saved_run(
+        manager.runs_dir(), research_input
+    )
     if reusable is not None:
         # explicit reuse: show the completed result; a new run needs a deliberate click
         st.session_state[SESSION_RUN_KEY] = reusable
+        st.session_state[RESET_SAVED_KEY] = True
         st.session_state[REUSE_KEY] = research_input.model_dump(mode="json")
         return
     st.session_state.pop(REUSE_KEY, None)
@@ -416,6 +221,7 @@ def _handle_submit(mode: ResearchMode, fields: Fields, notices: list[tuple[str, 
         notices.append(("warning", "A research run is already in progress; wait for it to end."))
         return
     st.session_state[SESSION_RUN_KEY] = run.paths.run_id
+    st.session_state[RESET_SAVED_KEY] = True
     st.rerun()  # re-render the input panel in its running state (Run disabled, Cancel shown)
 
 
@@ -433,28 +239,56 @@ def _render_reuse_prompt(manager: RunManager, active: bool) -> None:
         run = manager.start(ResearchInput.model_validate(pending))
         if run is not None:
             st.session_state[SESSION_RUN_KEY] = run.paths.run_id
+            st.session_state[RESET_SAVED_KEY] = True
         st.rerun()
 
 
 def render() -> None:
+    """Research Workspace: notices, two panels, workflow, then the cockpit or the live trace."""
     manager = get_manager()
+    if st.session_state.pop(RESET_SAVED_KEY, False):
+        st.session_state[SAVED_SELECT_KEY] = ""  # a new run or reuse returns to the live view
     run_id: str | None = st.session_state.get(SESSION_RUN_KEY) or manager.latest_run_id()
     active_run = manager.active_run()
+    # Notices live above the two-column row, so headings in both columns always start together.
+    notice_area = st.container(key="ls_notices")
     left, center = st.columns([3, 8], gap="large")
     notices: list[tuple[str, str]] = []
     with left, st.container(key="ls_left_panel"):
         mode, submitted, cancelled, fields = _render_input_panel(active_run is not None)
+        saved_choice = _render_saved_selector(manager, active_run is not None)
     if cancelled and active_run is not None:
         manager.cancel(active_run.paths.run_id)
     if submitted:
         _handle_submit(mode, fields, notices)
         run_id = st.session_state.get(SESSION_RUN_KEY) or run_id
-    with center:
+    viewing_saved = saved_choice is not None and active_run is None and not submitted
+    if viewing_saved:
+        run_id = saved_choice
+    with notice_area:
         for level, message in notices:
             getattr(st, level)(message)
-        _render_reuse_prompt(manager, active_run is not None)
+        if viewing_saved:
+            _render_saved_notice(manager, saved_choice)
+        else:
+            _render_reuse_prompt(manager, active_run is not None)
+    with center:
         _live_workflow(run_id, mode)
-        snap = manager.snapshot(run_id) if run_id else None
+        snap = _snapshot(manager, run_id)
         if snap is not None and not snap.active:
-            _render_results(snap)
-        _live_bts(run_id)
+            cockpit.render(snap)
+        else:
+            _live_trace(run_id)
+
+
+def _render_saved_notice(manager: RunManager, run_id: str | None) -> None:
+    snap = _snapshot(manager, run_id)
+    if snap is None:
+        st.error("This saved run could not be read from disk.")
+        return
+    summary = next((r for r in list_saved_runs(manager.runs_dir()) if r.run_id == run_id), None)
+    label = LABEL_TEXT[summary.label] if summary else snap.status
+    st.info(
+        f"Viewing saved run {snap.run_id} - {label}. Loaded from disk exactly as saved: no "
+        "model calls, no searches and no new research were made."
+    )

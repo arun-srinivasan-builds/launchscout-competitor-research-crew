@@ -281,8 +281,8 @@ div[data-testid="stMarkdownContainer"] .ls-events li { margin: .15rem 0; font-si
   background: var(--ls-muted);
 }
 
-/* Two-panel layout: sticky control panel on desktop, stacked below 960px */
-@media (min-width: 961px) {
+/* Two-panel layout: sticky control panel on wide desktops, stacked at 1200px and below */
+@media (min-width: 1201px) {
   .st-key-ls_left_panel { position: sticky; top: 1rem; }
 }
 
@@ -314,14 +314,15 @@ div[data-testid="stExpander"] {
   border: 1px solid var(--ls-border); border-radius: var(--ls-radius); background: var(--ls-surface);
 }
 
-/* Responsive: laptop keeps four columns; tablet and mobile stack with vertical connectors */
+/* Responsive: panels stack at 1200px; the four agent cards stay in one row down to 820px and
+   stack with vertical connectors below that */
 @media (max-width: 1100px) {
   .block-container { padding-left: 1.25rem; padding-right: 1.25rem; }
   .ls-canvas { padding: 1.1rem 1rem .6rem 1rem; }
   .ls-flow { column-gap: .75rem; }
   .ls-node { padding: .7rem; }
 }
-@media (max-width: 1100px) {
+@media (max-width: 820px) {
   .ls-flow { grid-template-columns: minmax(0, 1fr); width: min(560px, 100%); margin: 0 auto; }
   .ls-arc { display: none; }
   .ls-node, .ls-a1, .ls-a2, .ls-a3, .ls-a4, .ls-manager-node { grid-row: auto; grid-column: 1; }
@@ -338,7 +339,7 @@ div[data-testid="stExpander"] {
     border-top: 10px solid var(--ls-purple);
   }
 }
-@media (max-width: 960px) {
+@media (max-width: 1200px) {
   div[data-testid="stHorizontalBlock"] { flex-wrap: wrap; }
   div[data-testid="stColumn"] { min-width: 100% !important; flex: 1 1 100% !important; }
 }
@@ -353,6 +354,202 @@ div[data-testid="stExpander"] {
 }
 </style>
 """
+
+
+COCKPIT_CSS = """
+<style>
+.ck-wrap { margin: .25rem 0 1rem 0; }
+div[data-testid="stButtonGroup"] > div { flex-wrap: wrap; overflow: visible; row-gap: .4rem; }
+div[data-testid="stButtonGroup"] button p { font-size: .98rem; font-weight: 600; }
+.ck-eyebrow {
+  font-size: .8rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ls-muted); margin-bottom: .35rem;
+}
+.ck-hero {
+  border: 1px solid var(--ls-border); border-radius: 18px; padding: 1.1rem 1.25rem;
+  background:
+    radial-gradient(600px 220px at 0% 0%, rgba(45, 212, 191, 0.10), transparent 70%),
+    radial-gradient(500px 200px at 100% 0%, rgba(139, 92, 246, 0.10), transparent 70%),
+    var(--ls-surface);
+}
+.ck-chips { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .75rem; }
+.ck-chip {
+  display: inline-flex; align-items: center; gap: .45rem; padding: .35rem .8rem;
+  border-radius: 999px; font-size: .92rem; font-weight: 700; border: 1px solid var(--ls-border);
+  background: var(--ls-surface-2); color: var(--ls-text);
+}
+.ck-chip small { font-weight: 500; color: var(--ls-muted); }
+.ck-dot { width: .6rem; height: .6rem; border-radius: 50%; background: var(--ls-muted); }
+.ck-ok { border-color: var(--ls-teal); }
+.ck-ok .ck-dot { background: var(--ls-teal); }
+.ck-bad { border-color: #F87171; }
+.ck-bad .ck-dot { background: #F87171; }
+.ck-warn { border-color: var(--ls-warn); }
+.ck-warn .ck-dot { background: var(--ls-warn); }
+.ck-take { font-size: 1.12rem; line-height: 1.6; color: var(--ls-text); margin: .1rem 0 .9rem 0; }
+.ck-take b { color: var(--ls-teal); }
+.ck-kpis {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(124px, 1fr)); gap: .7rem;
+}
+@media (max-width: 900px) { .ck-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .ck-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ck-kpi {
+  border: 1px solid var(--ls-border); border-radius: 14px; padding: .7rem .85rem;
+  background: rgba(5, 12, 28, 0.55);
+}
+.ck-kpi-top { display: flex; align-items: baseline; gap: .35rem; }
+.ck-kpi-val { font-size: 1.7rem; font-weight: 800; color: var(--ls-text); line-height: 1.1; }
+.ck-kpi-of { font-size: .95rem; color: var(--ls-muted); }
+.ck-kpi-label { font-size: .86rem; color: var(--ls-muted); margin-top: .15rem; }
+.ck-bar { height: 6px; border-radius: 99px; background: #1B2D4F; margin-top: .55rem; }
+.ck-fill { height: 100%; border-radius: 99px; width: 0; background: var(--ls-teal); }
+.ck-fill.ck-low { background: #F87171; }
+.ck-fill.ck-mid { background: var(--ls-warn); }
+.ck-w-0 { width: 0; } .ck-w-5 { width: 5%; } .ck-w-10 { width: 10%; } .ck-w-15 { width: 15%; }
+.ck-w-20 { width: 20%; } .ck-w-25 { width: 25%; } .ck-w-30 { width: 30%; } .ck-w-35 { width: 35%; }
+.ck-w-40 { width: 40%; } .ck-w-45 { width: 45%; } .ck-w-50 { width: 50%; } .ck-w-55 { width: 55%; }
+.ck-w-60 { width: 60%; } .ck-w-65 { width: 65%; } .ck-w-70 { width: 70%; } .ck-w-75 { width: 75%; }
+.ck-w-80 { width: 80%; } .ck-w-85 { width: 85%; } .ck-w-90 { width: 90%; } .ck-w-95 { width: 95%; }
+.ck-w-100 { width: 100%; }
+.ck-block {
+  margin-top: .85rem; padding: .7rem .9rem; border-radius: 12px; font-size: .98rem;
+  border: 1px solid var(--ls-warn); background: rgba(251, 191, 36, 0.08); color: var(--ls-text);
+}
+.ck-block.ck-pass { border-color: var(--ls-teal); background: rgba(45, 212, 191, 0.08); }
+.ck-block ul { margin: .35rem 0 0 1.1rem; padding: 0; }
+.ck-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: .9rem; }
+.ck-card {
+  border: 1px solid var(--ls-border); border-radius: 16px; padding: 1rem 1.05rem;
+  background: var(--ls-surface); display: flex; flex-direction: column; gap: .6rem;
+}
+.ck-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: .6rem; }
+.ck-card h4 { margin: 0; font-size: 1.12rem; color: var(--ls-text); line-height: 1.25; }
+.ck-site { font-size: .88rem; color: var(--ls-muted); overflow-wrap: anywhere; }
+.ck-badge {
+  display: inline-block; padding: .15rem .6rem; border-radius: 999px; font-size: .78rem;
+  font-weight: 700; border: 1px solid var(--ls-border); background: var(--ls-surface-2);
+  color: var(--ls-text); white-space: nowrap;
+}
+.ck-badge.ck-ok { border-color: var(--ls-teal); color: var(--ls-teal); background: rgba(45,212,191,.1); }
+.ck-badge.ck-bad { border-color: #F87171; color: #F87171; background: rgba(248,113,113,.1); }
+.ck-badge.ck-warn { border-color: var(--ls-warn); color: var(--ls-warn); background: rgba(251,191,36,.1); }
+.ck-badge.ck-rec { border-color: var(--ls-purple); color: #C4B5FD; background: rgba(139,92,246,.12); }
+.ck-field { font-size: .96rem; line-height: 1.5; color: var(--ls-text); }
+.ck-field span.ck-k {
+  display: block; font-size: .76rem; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ls-muted); margin-bottom: .1rem;
+}
+.ck-tags { display: flex; flex-wrap: wrap; gap: .35rem; }
+.ck-tag {
+  padding: .12rem .55rem; border-radius: 8px; font-size: .82rem; font-weight: 600;
+  background: var(--ls-surface-2); border: 1px solid var(--ls-border); color: var(--ls-text);
+}
+.ck-srcs { display: flex; flex-direction: column; gap: .3rem; }
+.ck-src a {
+  color: #7DD3FC; text-decoration: none; font-size: .93rem; overflow-wrap: anywhere;
+  border-bottom: 1px dotted rgba(125, 211, 252, 0.5);
+}
+.ck-src a:hover { color: #BAE6FD; }
+.ck-src small { color: var(--ls-muted); margin-left: .35rem; }
+.ck-quote {
+  border-left: 3px solid var(--ls-teal); padding: .45rem .8rem; margin: .35rem 0;
+  background: rgba(5, 12, 28, 0.45); border-radius: 0 10px 10px 0; font-size: .97rem;
+  line-height: 1.5;
+}
+.ck-quote.ck-complaint { border-left-color: #F87171; }
+.ck-road { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: .9rem; }
+.ck-week {
+  position: relative; border: 1px solid var(--ls-border); border-top: 3px solid var(--ls-blue);
+  border-radius: 14px; padding: .85rem .9rem; background: var(--ls-surface);
+}
+.ck-week:nth-child(2) { border-top-color: var(--ls-teal); }
+.ck-week:nth-child(3) { border-top-color: var(--ls-amber); }
+.ck-week:nth-child(4) { border-top-color: var(--ls-orange); }
+.ck-week-num { font-size: .78rem; font-weight: 800; letter-spacing: .08em; color: var(--ls-muted); }
+.ck-week h5 { margin: .15rem 0 .5rem 0; font-size: 1.02rem; color: var(--ls-text); }
+.ck-week ul { margin: .4rem 0 0 0; padding-left: 1.05rem; font-size: .9rem; line-height: 1.45; }
+.ck-week li { margin: .25rem 0; }
+.ck-rules { display: flex; flex-direction: column; gap: .45rem; }
+.ck-rule {
+  display: grid; grid-template-columns: 3.2rem 1fr auto; gap: .7rem; align-items: start;
+  border: 1px solid var(--ls-border); border-radius: 12px; padding: .6rem .8rem;
+  background: var(--ls-surface);
+}
+.ck-rule-id { font-weight: 800; color: var(--ls-muted); }
+.ck-rule-title { font-weight: 700; color: var(--ls-text); }
+.ck-rule-detail { font-size: .92rem; color: var(--ls-muted); margin-top: .1rem; }
+.ck-note { font-size: .9rem; color: var(--ls-muted); margin: .4rem 0 .6rem 0; }
+.ck-h { font-size: 1.12rem; font-weight: 700; margin: 1rem 0 .5rem 0; color: var(--ls-text); }
+.st-key-ck_actions {
+  border: 1px solid var(--ls-border); border-radius: 14px; background: var(--ls-surface);
+  padding: .65rem .85rem .75rem .85rem; margin: .8rem 0 .9rem 0;
+}
+.ck-actions-title {
+  font-size: .8rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--ls-muted); margin-bottom: .45rem;
+}
+.st-key-ck_actions div[data-testid="stDownloadButton"] button {
+  width: 100%; min-height: 2.7rem; font-weight: 700;
+}
+@media (min-width: 521px) {
+  /* keep the two downloads side by side even where the main panels have stacked */
+  .st-key-ck_actions div[data-testid="stHorizontalBlock"] { flex-wrap: nowrap; }
+  .st-key-ck_actions div[data-testid="stColumn"] { min-width: 0 !important; flex: 1 1 0 !important; }
+}
+.st-key-ck_nav div[data-testid="stButtonGroup"] > div {
+  flex-wrap: wrap; overflow: visible; row-gap: .45rem; column-gap: .4rem;
+}
+/* Business intelligence (first four) vs trust and engineering (last two) */
+.st-key-ck_nav div[data-testid="stButtonGroup"] > div > button:nth-child(-n+4) {
+  border-color: rgba(45, 212, 191, 0.55);
+}
+.st-key-ck_nav div[data-testid="stButtonGroup"] > div > button:nth-child(n+5) {
+  border-color: rgba(167, 139, 250, 0.7); background: rgba(139, 92, 246, 0.10);
+}
+.st-key-ck_nav div[data-testid="stButtonGroup"] > div > button:nth-child(5) { margin-left: .9rem; }
+.st-key-ck_nav div[data-testid="stButtonGroup"] button p { font-size: .9rem; }
+/* long URLs and tables never widen the page when the full report is opened */
+div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] {
+  overflow-wrap: anywhere; word-break: break-word; max-width: 100%;
+}
+div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] table {
+  display: block; max-width: 100%; overflow-x: auto;
+}
+div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] th,
+div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] td {
+  overflow-wrap: normal; word-break: normal; min-width: 7rem; vertical-align: top;
+}
+div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] td a {
+  overflow-wrap: anywhere; word-break: break-all;
+}
+div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] pre,
+div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] code {
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .ck-hero { padding: .9rem .9rem; }
+  .ck-take { font-size: 1.02rem; }
+  .ck-kpi-val { font-size: 1.45rem; }
+  .ck-rule { grid-template-columns: 2.6rem 1fr; }
+  .ck-rule .ck-badge { grid-column: 2; justify-self: start; }
+  .ck-grid { grid-template-columns: minmax(0, 1fr); }
+  /* report tables on phones: fixed layout, every cell wraps; nothing is hidden or scrolls */
+  div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] table {
+    display: table; width: 100%; table-layout: fixed;
+  }
+  div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] th,
+  div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] td {
+    min-width: 0; overflow-wrap: anywhere; word-break: break-word; font-size: .85rem;
+    padding: .35rem .4rem;
+  }
+}
+</style>
+"""
+
+
+def inject_cockpit_theme() -> None:
+    """Inject the Research Intelligence Cockpit styles (only used by the cockpit view)."""
+    st.markdown(COCKPIT_CSS, unsafe_allow_html=True)
 
 
 def inject_theme() -> None:

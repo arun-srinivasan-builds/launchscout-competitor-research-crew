@@ -80,7 +80,7 @@ def test_manager_shown_only_in_hierarchical_mode():
 def test_behind_the_scenes_expander_present_and_empty():
     at = _app()
     labels = [e.label for e in at.expander]
-    assert "Behind the Scenes" in labels
+    assert "Engineering Trace" in labels
     text = _all_markdown(at)
     assert "No run has been executed" in text
     assert "Unavailable (nothing measured)" in text

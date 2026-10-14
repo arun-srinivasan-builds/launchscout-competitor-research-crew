@@ -66,9 +66,11 @@ def test_results_and_behind_the_scenes_after_completion(tmp_path):
     _wait_idle(manager)
     at.run()
     assert not at.exception
-    assert any("unvalidated draft" in s.value for s in at.success)
+    assert "Report validated" in " ".join(m.value for m in at.markdown)
+    at.session_state["cockpit_area"] = "Engineering Trace"
+    at.run()
     text = _markdown(at)
-    assert "Acceptance:</b> Not evaluated" in text
+    assert "Acceptance:</b> pass (validated_pass)" in text
     assert at.button(key="run_research").disabled is False
     run_id = manager.latest_run_id()
     assert run_id and (tmp_path / "runs" / run_id / "events.jsonl").is_file()
@@ -134,5 +136,7 @@ def test_failed_run_shows_error_not_results(tmp_path):
     at.button(key="run_research").click().run()
     _wait_idle(manager)
     at.run()
-    assert any("Run failed" in e.value for e in at.error)
+    assert "The run failed before a report could be produced." in " ".join(
+        m.value for m in at.markdown
+    )
     assert not at.exception

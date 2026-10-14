@@ -74,3 +74,7 @@ Not applicable in M2 (no research executed). Verified source coverage: n/a. Unsu
 | M2 UI | 51 tests | 51 passed |
 | M3 (commit 440acc7) | 112 tests | 112 passed |
 | M3 efficiency follow-up | 129 tests | 129 passed (run twice) |
+| M4 (uncommitted) | 169 tests | 169 passed (after the live acceptance run and evidence-text rule) |
+| M4 saved-run replay (uncommitted) | 181 tests | 181 passed |
+| M4 cockpit prototype | 195 tests | 195 passed |
+| M4 cockpit integration (M4 gate) | 197 tests | 197 passed; ruff clean; responsive check at 1440/1280/1024/768/390 |

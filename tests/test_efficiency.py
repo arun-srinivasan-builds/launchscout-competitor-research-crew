@@ -138,9 +138,7 @@ def test_identical_input_reuses_completed_run_until_explicit_rerun(tmp_path, llm
 
 def test_input_identity_ignores_case_spacing_and_competitor_order(tmp_path):
     manager = make_manager(tmp_path)
-    run = manager.start(
-        INPUT.model_copy(update={"known_competitors": ["Acme", "Beta Foods"]})
-    )
+    run = manager.start(INPUT.model_copy(update={"known_competitors": ["Acme", "Beta Foods"]}))
     _wait_idle(manager)
     same = ResearchInput(
         idea="  healthy MILLET   meal boxes ",
@@ -213,10 +211,25 @@ def test_crewai_cache_answers_are_counted_not_hidden(tmp_path):
 
 
 DETERMINISTIC_MODULES = [
-    "grounding", "evidence", "progress", "runs", "inputs", "schemas", "config", "logging_utils",
+    "grounding",
+    "evidence",
+    "progress",
+    "runs",
+    "inputs",
+    "schemas",
+    "config",
+    "logging_utils",
 ]
-FORBIDDEN_IMPORTS = ("crewai", "openai", "litellm", "langchain", "launchscout.llm",
-                     "launchscout.crew", "launchscout.agents", "launchscout.tasks")
+FORBIDDEN_IMPORTS = (
+    "crewai",
+    "openai",
+    "litellm",
+    "langchain",
+    "launchscout.llm",
+    "launchscout.crew",
+    "launchscout.agents",
+    "launchscout.tasks",
+)
 
 
 @pytest.mark.parametrize("module", DETERMINISTIC_MODULES)

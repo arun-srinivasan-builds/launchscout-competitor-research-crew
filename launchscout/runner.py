@@ -30,12 +30,14 @@ from launchscout.grounding import (
     parse_competitors,
     parse_reviews,
     parse_strategy,
-    report_unsupported_urls,
 )
+from launchscout.links import Fetcher
 from launchscout.logging_utils import get_logger, redact
 from launchscout.progress import AGENT_ORDER, AgentState, RunEvent, agent_metrics, reduce_events
-from launchscout.runs import RunPaths, create_run_dir
+from launchscout.reporting import produce_report
+from launchscout.runs import DEFAULT_RUNS_DIR, RunPaths, create_run_dir
 from launchscout.schemas import (
+    Acceptance,
     CompetitorSet,
     ResearchInput,
     ResearchMode,
@@ -46,6 +48,7 @@ from launchscout.schemas import (
 )
 from launchscout.tasks import TASK_ORDER, TASK_RESEARCH, TASK_REVIEWS, TASK_STRATEGY
 from launchscout.tools import ToolContext
+from launchscout.validation import ValidationReport
 
 log = get_logger(__name__)
 
@@ -77,6 +80,18 @@ class RunSnapshot(BaseModel):
     usage: Usage = Field(default_factory=Usage)
     completed_tasks: list[str] = Field(default_factory=list)
     model_name: str | None = None
+    validation: ValidationReport | None = None
+    report_files: dict[str, str] = Field(default_factory=dict)
+    run_dir: str | None = None
+
+    @property
+    def acceptance(self) -> Acceptance:
+        """Single source of truth for the acceptance result (never recomputed by the UI)."""
+        return self.validation.acceptance if self.validation else Acceptance()
+
+    @property
+    def report_state(self) -> str | None:
+        return self.validation.state if self.validation else None
 
     def agent_metrics(self) -> dict[str, dict[str, int | float]]:
         """Per-agent efficiency numbers derived only from recorded events."""
@@ -106,8 +121,12 @@ class ResearchRun:
         started_at: datetime,
         search_impl: Any = None,
         scrape_impl: Any = None,
+        link_fetcher: Fetcher | None = None,
     ) -> None:
         self.paths = paths
+        self.link_fetcher = link_fetcher
+        self.validation: ValidationReport | None = None
+        self.report_files: dict[str, str] = {}
         self.input = research_input
         self.settings = settings
         self.limits = limits
@@ -190,6 +209,9 @@ class ResearchRun:
                 usage=self._usage(),
                 completed_tasks=[t for t in TASK_ORDER if t in outputs],
                 model_name=self.settings.model_name,
+                validation=self.validation,
+                report_files=dict(self.report_files),
+                run_dir=str(self.paths.root),
             )
 
     def _usage(self) -> Usage:
@@ -255,7 +277,9 @@ class RunManager:
         settings_loader: Callable[[], Settings] | None = None,
         search_impl: Any = None,
         scrape_impl: Any = None,
+        link_fetcher: Fetcher | None = None,
     ) -> None:
+        self._link_fetcher = link_fetcher
         self._runs_dir = runs_dir
         self._executor = executor or _default_executor
         self._limits = limits or RunLimits()
@@ -267,6 +291,10 @@ class RunManager:
         self._lock = threading.Lock()
 
     # -- queries ---------------------------------------------------------------------------
+    def runs_dir(self) -> Path:
+        """Directory holding saved runs for this manager."""
+        return self._runs_dir if self._runs_dir is not None else DEFAULT_RUNS_DIR
+
     def settings(self) -> Settings:
         """Current settings (same loader the runs use)."""
         return self._settings_loader()
@@ -320,6 +348,7 @@ class RunManager:
                 datetime.now(UTC),
                 self._search_impl,
                 self._scrape_impl,
+                self._link_fetcher,
             )
             run.thread = threading.Thread(
                 target=self._work, args=(run,), name=f"run-{paths.run_id}", daemon=True
@@ -392,10 +421,22 @@ class RunManager:
         strat = (
             parse_strategy(outputs[TASK_STRATEGY], ledger) if TASK_STRATEGY in outputs else None
         )
-        report_text: str | None = None
-        if run.paths.report_md.is_file():
-            report_text = run.paths.report_md.read_text(encoding="utf-8", errors="replace")
-        unsupported = report_unsupported_urls(report_text, ledger) if report_text else []
+        # Deterministic validation + export from stored outputs (no model, no new searches).
+        outcome = produce_report(
+            run.paths,
+            comp.value if comp else None,
+            rev.value if rev else None,
+            strat.value if strat else None,
+            ledger,
+            run.link_fetcher,
+        )
+        report_text = outcome.final_markdown
+        unsupported = next(
+            (r.items for r in outcome.validation.rules if r.id == "R3"), []
+        )
+        with run._lock:
+            run.validation = outcome.validation
+            run.report_files = outcome.files
 
         with run._lock:
             run.competitors, run.reviews, run.strategy = comp, rev, strat
@@ -409,8 +450,15 @@ class RunManager:
         if unsupported:
             run.collector.emit(
                 "grounding",
-                f"{len(unsupported)} URL(s) in the draft report were not returned by any tool",
+                f"{len(unsupported)} URL(s) in the report were not returned by any tool",
             )
+        run.collector.emit(
+            "grounding",
+            f"Report validation: {outcome.validation.state}"
+            + ("" if outcome.validation.acceptance.result == "pass"
+               else f" ({len(outcome.validation.acceptance.reasons)} reason(s))"),
+            status="ok" if outcome.validation.acceptance.result == "pass" else "error",
+        )
 
         parsed_ok = all(
             g is not None and g.value is not None for g in (comp, rev, strat)  # type: ignore[union-attr]
@@ -473,6 +521,7 @@ class RunManager:
             status=snap.status,
             usage=snap.usage,
             error=snap.error,
+            acceptance=snap.acceptance,
         )
         (root / "metadata.json").write_text(metadata.model_dump_json(indent=2), encoding="utf-8")
 
@@ -507,10 +556,25 @@ def snapshot_from_disk(paths: RunPaths) -> RunSnapshot | None:
             evidence = [EvidenceEntry.model_validate(row) for row in rows]
         except ValueError:
             evidence = []
-    report = (
-        paths.report_md.read_text("utf-8", errors="replace") if paths.report_md.is_file() else None
-    )
+    validation = load("validation.json", ValidationReport)
+    report = None
+    report_files: dict[str, str] = {}
+    names = (("report.md", "report.pdf"), ("report-PARTIAL.md", "report-PARTIAL.pdf"))
+    for md_name, pdf_name in names:
+        candidate = paths.root / md_name
+        if candidate.is_file():
+            report = candidate.read_text("utf-8", errors="replace")
+            report_files = {"md": md_name}
+            if (paths.root / pdf_name).is_file():
+                report_files["pdf"] = pdf_name
+            break
     finished = meta.status not in ("created", "running")
+    events = load_events(paths.events_jsonl)
+    done: set[str] = set()
+    for event in events:
+        if event.kind == "task_completed":
+            name = event.task or event.summary.removeprefix("Task complete: ")
+            done.add(name)
     return RunSnapshot(
         run_id=meta.run_id,
         mode=meta.mode,
@@ -521,7 +585,7 @@ def snapshot_from_disk(paths: RunPaths) -> RunSnapshot | None:
         started_at=meta.started_at,
         finished_at=meta.finished_at,
         input=research_input,
-        events=load_events(paths.events_jsonl),
+        events=events,
         competitors=load("competitors.json", CompetitorSet),
         reviews=load("reviews.json", ReviewSet),
         strategy=load("strategy.json", StrategyOutput),
@@ -530,8 +594,11 @@ def snapshot_from_disk(paths: RunPaths) -> RunSnapshot | None:
         unsupported_report_urls=list(grounding.get("unsupported_report_urls", [])),
         evidence=evidence,
         usage=meta.usage,
-        completed_tasks=[],
+        completed_tasks=[t for t in TASK_ORDER if t in done],
         model_name=meta.model_name,
+        validation=validation,
+        report_files=report_files,
+        run_dir=str(paths.root),
     )
 
 

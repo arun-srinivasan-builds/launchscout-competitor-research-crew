@@ -3,6 +3,7 @@ from datetime import date
 
 from launchscout.evidence import EvidenceEntry, EvidenceLedger, normalize_url
 from launchscout.grounding import (
+    amount_in_text,
     extract_json,
     ground_competitors,
     parse_competitors,
@@ -14,10 +15,10 @@ from launchscout.grounding import (
 TODAY = date(2026, 10, 14)
 
 
-def ledger_with(*urls: str) -> EvidenceLedger:
+def ledger_with(*urls: str, excerpt: str = "Lunch box Rs 99 per box") -> EvidenceLedger:
     ledger = EvidenceLedger()
     for url in urls:
-        ledger.add(EvidenceEntry(url=url, kind="search_result", accessed_on=TODAY))
+        ledger.add(EvidenceEntry(url=url, kind="search_result", excerpt=excerpt, accessed_on=TODAY))
     return ledger
 
 
@@ -40,7 +41,7 @@ def test_normalize_url_ignores_scheme_www_fragment_slash():
 def test_extract_json_handles_fences_and_prose():
     raw = 'Here you go:\n```json\n{"a": 1}\n```'
     assert extract_json(raw) == {"a": 1}
-    assert extract_json("noise {\"b\": 2} tail") == {"b": 2}
+    assert extract_json('noise {"b": 2} tail') == {"b": 2}
     assert extract_json("no json here") is None
 
 
@@ -164,3 +165,62 @@ def test_report_unsupported_urls_detected():
     assert report_unsupported_urls(md, ledger_with("https://real.example/a")) == [
         "https://fake.example/z"
     ]
+
+
+def test_amount_in_text_formats():
+    assert amount_in_text(180, "Lunch box Rs 180 per box")
+    assert amount_in_text(1200, "Plan costs Rs. 1,200/- monthly")
+    assert amount_in_text(149.5, "only 149.50 today")
+    assert amount_in_text(99, "price: 99.00")
+    assert not amount_in_text(99, "call 1999 or 0991")  # not a standalone number
+    assert not amount_in_text(50, "rated 4.50 stars")
+    assert not amount_in_text(180, "")
+
+
+def test_verified_price_without_amount_in_evidence_text_is_downgraded():
+    url = "https://acme.example/menu"
+    price = {
+        "status": "verified",
+        "amount": 250,
+        "currency": "INR",
+        "unit": "per box",
+        "evidence_url": url,
+        "accessed_on": "2026-10-14",
+    }
+    raw = json.dumps(
+        {"competitors": [competitor(evidence=[url], price=price)], "shortfall_reason": "one"}
+    )
+    led = ledger_with(url, "https://acme.example/", excerpt="Menu: lunch box Rs 99 per box")
+    grounded = ground_competitors(parse_competitors(raw), led)
+    comp = grounded.value.competitors[0]
+    assert comp.price.status == "unknown"
+    assert any("not found in the stored text" in i for i in grounded.issues)
+    assert any("amount not found" in u for u in comp.unknowns)
+
+
+def test_scraped_page_text_beyond_excerpt_supports_the_price():
+    url = "https://acme.example/menu"
+    price = {
+        "status": "verified",
+        "amount": 250,
+        "currency": "INR",
+        "unit": "per box",
+        "evidence_url": url,
+        "accessed_on": "2026-10-14",
+    }
+    raw = json.dumps(
+        {"competitors": [competitor(evidence=[url], price=price)], "shortfall_reason": "one"}
+    )
+    led = EvidenceLedger()
+    led.add(EvidenceEntry(url="https://acme.example/", kind="search_result", accessed_on=TODAY))
+    led.add(
+        EvidenceEntry(
+            url=url,
+            kind="scraped",
+            excerpt="intro",
+            text="intro ... lunch box Rs 250 per box",
+            accessed_on=TODAY,
+        )
+    )
+    grounded = ground_competitors(parse_competitors(raw), led)
+    assert grounded.value.competitors[0].price.status == "verified"

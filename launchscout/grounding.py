@@ -25,6 +25,7 @@ from launchscout.schemas import (
 )
 
 _URL_RE = re.compile(r"https?://[^\s)>\]\"'`]+")
+_THOUSANDS = re.compile(r"(?<=\d),(?=\d{3})")
 _TRAILING = ".,;:!?"
 
 
@@ -98,6 +99,17 @@ def _coerce_price(raw: Any, issues: list[str], name: str) -> Price:
     return Price(status=status, **fields)  # type: ignore[arg-type]
 
 
+def amount_in_text(amount: float, text: str) -> bool:
+    """True if `amount` appears as a standalone number in `text` (commas and .00 tolerated)."""
+    if not text:
+        return False
+    plain = _THOUSANDS.sub("", text)
+    number = f"{amount:.2f}".rstrip("0").rstrip(".")
+    tail = "0*" if "." in number else r"(?:\.0+)?"
+    pattern = rf"(?<![\d.]){re.escape(number)}{tail}(?![\d]|\.\d)"
+    return re.search(pattern, plain) is not None
+
+
 def parse_competitors(raw: str) -> GroundedCompetitors:
     data = extract_json(raw)
     if data is None or not isinstance(data.get("competitors"), list):
@@ -160,6 +172,16 @@ def ground_competitors(result: GroundedCompetitors, ledger: EvidenceLedger) -> G
             issues.append(f"{comp.name}: price evidence URL not in tool results; set to unknown")
             unknowns.append("price unknown: evidence URL was not returned by any tool")
             price = Price()
+        elif price.status == "verified" and price.amount is not None:
+            entry = ledger.get(price.evidence_url)
+            evidence_text = (entry.text or entry.excerpt) if entry else ""
+            if not amount_in_text(price.amount, evidence_text):
+                issues.append(
+                    f"{comp.name}: amount {price.amount:g} not found in the stored text of its "
+                    "evidence page; price set to unknown"
+                )
+                unknowns.append("price unknown: amount not found in the stored evidence text")
+                price = Price()
         competitors.append(
             comp.model_copy(update={"evidence_urls": kept, "unknowns": unknowns, "price": price})
         )

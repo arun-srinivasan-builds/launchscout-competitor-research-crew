@@ -21,6 +21,7 @@ class EvidenceEntry(BaseModel):
     kind: Literal["search_result", "scraped"]
     title: str = ""
     excerpt: str = ""
+    text: str = ""  # bounded page text (scraped) used to re-check claims
     status: Literal["ok", "error"] = "ok"
     accessed_on: date
     via: str = ""
@@ -55,6 +56,12 @@ class EvidenceLedger:
 
     def contains(self, url: str | None) -> bool:
         return bool(url) and normalize_url(url) in self._entries  # type: ignore[arg-type]
+
+    def get(self, url: str | None) -> EvidenceEntry | None:
+        if not url:
+            return None
+        with self._lock:
+            return self._entries.get(normalize_url(url))
 
     def host_seen(self, url: str | None) -> bool:
         if not url:

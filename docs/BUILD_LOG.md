@@ -41,7 +41,8 @@ No breaks were reported for this window and none are assumed.
 | M1 Requirements/repository assessment + PRP | Complete; PRP v1.1 approved by user | 10:20 AM (user-confirmed) | 10:56 AM (user-confirmed, planning window end) | none |
 | M2 Scaffold, configuration and approved UI | Complete; UI visually approved by user; ruff clean, 51 tests, smoke 200; live `gpt-6-luna` call verified | after 11:00:25 AM | final gate 12:24 PM (system-clock) | see git log |
 | M3 Real sequential CrewAI execution | Implemented; live runs L1-L4 executed; awaiting user acceptance review (uncommitted) | not recorded | not recorded | none yet |
-| M3 efficiency follow-up | Audit complete; standards added; code and tests done; awaiting review | not recorded | not recorded | see git log |
+| M3 efficiency follow-up | Audit complete; standards added; code and tests done | not recorded | not recorded | `d9ea22e` |
+| M4 Evidence-validated reports | Complete: validators, gate, PDF/Markdown, saved-run replay, cockpit in production; 197 tests; one controlled live run (L5) returned `partial_failed_acceptance` on actual evidence; awaiting user review | not recorded | not recorded | see git log |
 | M4–M8 | Not authorized | — | — | none |
 
 ## Breaks and pauses
@@ -161,9 +162,178 @@ Rework cycles: 3 (budgets, cancellation, test isolation). Known limits: cancel/t
 Note on per-agent tokens: they were not recorded in L1-L4, so the first live run after this change
 is needed to populate them; this was not run because the audit forbade new API calls.
 
-## Requirements carried into M4+ (unchanged)
-- Acceptance gate, report validators and link checks, `-PARTIAL` naming, PDF/Markdown export (M4).
-- Hierarchical Manager delegation using the same `AgentState` contract (M5).
+## M4 - Evidence-validated reports (complete; committed at the M4 gate)
+
+Authorized by the user on 14 Oct 2026 (M4 only; E-01..E-10 apply). No paid live research run was
+made for M4; verification used the stub crew plus offline re-validation of two stored live runs.
+
+| Area | Implementation |
+|---|---|
+| Report flow | The Report Writer agent still writes the draft. Finalization (pure Python) preserves it as `report.writer.md`, validates it, tags unsupported items in place, adds a warning or pass header, appends a generated `### Verification status` subsection under Sources (keeps exactly six top-level sections) and writes `report.md`/`report.pdf` or `report-PARTIAL.md`/`report-PARTIAL.pdf` |
+| Validators | R1 six sections in order and no extras; R2 at least 3 competitor rows; R3 every URL was returned by a tool; R4 report prices match verified evidence (an amount the text itself labels unknown is allowed); R5 Weeks 1-4; R6 price labelled Recommendation; R7 Sources cover competitor and price evidence; R8 links (broken fails; blocked or unchecked is flagged, not failed) |
+| Acceptance gate | Pass only if at least 3 competitors have name, URL and evidence URL and at least 3 have a verified price whose evidence URL is in the ledger, and no rule fails. `RunMetadata.acceptance` and `validation.json` are the single source of truth; the UI only displays them |
+| States | `validated_pass`, `partial_failed_acceptance`, `failed_no_report`. Run `status` (crew outcome) is kept separate from acceptance |
+| Labels | Verified facts, unknown (not evidenced), inferred (no source) and Recommendation are labelled in the generated section; unsupported links and prices are tagged `[unverified link]` / `[unverified price]` and never dropped |
+| Quality evaluation | UI panel: rule table with results, gate counts, unsupported items, link table. Deterministic; no model |
+| Exports | Markdown and PDF (reportlab; Segoe UI/Arial/DejaVu TTF so the rupee sign renders, Helvetica ASCII fallback). Clickable links, tables, lists, partial banner. Download buttons read stored files |
+| Links | Pages already read during research are not requested again; at most 12 HEAD requests (6 s timeout) for the rest; network checks are disabled under `LAUNCHSCOUT_NO_LIVE` |
+| Re-validation | `revalidate_run(paths)` re-runs the rules on stored artifacts; no override exists |
+| Efficiency | M4 adds zero model calls and zero searches. The Report Writer's own 2-3 model calls are unchanged (assignment requires the agent) |
+
+### M4 controlled live acceptance run (L5; approved by the user, run exactly once)
+
+| Item | Result |
+|---|---|
+| Input | Cold-pressed juice subscription / Pune / gym-goers aged 20-35 (alternate test input D5) |
+| Pre-run checks | Limits active and printed from the real code path: 12 searches / 10 page reads per run (6 / 5 per agent), `max_llm_calls` 40, `max_iter` 8, 420 s per agent, 1200 s run limit, `Process.sequential`, Strategy Analyst without tools; keys present by name; `LAUNCHSCOUT_NO_LIVE` unset |
+| Execution | One click, no retry. 1m48s, 4/4 tasks complete, run `status=complete`, acceptance **fail** (`partial_failed_acceptance`) |
+| Model calls | 13 (Market Researcher 5, Review Analyst 5, Strategy Analyst 1, Report Writer 2) |
+| Tokens (measured) | 69,095 = 61,872 prompt + 7,223 completion; per agent: Market Researcher 22,847; Review Analyst 32,816; Strategy Analyst 3,111; Report Writer 10,321 |
+| Tools | 12 Serper searches, 10 page reads, 2 cache answers, 9 budget refusals (8 Market Researcher, 1 Review Analyst), 1 page-read error |
+| Link checker | 8 distinct URLs: 6 already read during research (no request), 2 real HEAD requests (cap 12, 6 s timeout): both HTTP 200 |
+| Gate | 2 competitors with name, URL and evidence URL (3 required), 0 verified prices (3 required) |
+| Rules | R1 PASS, R2 FAIL (2 rows), R3 FAIL (1 URL not returned by a tool), R4 PASS, R5 PASS, R6 PASS, R7 PASS, R8 PASS |
+| Report | Six sections in order; 9,535 characters; `report-PARTIAL.md` and `report-PARTIAL.pdf` (3 pages, 40 links, rupee sign rendered); no `report.md` |
+| View/download | Three fresh browser loads and two rounds of download clicks: events.jsonl, metadata.json, validation.json, evidence.json and competitors.json unchanged (size, mtime, line count). Tests with LLM sentinels cover the same actions |
+
+Findings from L5:
+1. **Reachability is not verification (demonstrated).** The Report Writer rewrote a cited Reddit URL (underscores to hyphens). Both versions returned HTTP 200, so R8 passed, but only the original was ever returned by a tool; R3 caught the mutated one and the report was tagged `[unverified link]`.
+2. **Prices were not published for this niche.** Competitors take orders through Instagram and WhatsApp; the only amount found was a 3-day trial price in a Facebook post, which the agent correctly left as `unknown` for per-unit price. The acceptance gate therefore failed on evidence, as it should. The idea was a reasonable but not sufficient choice for finding published prices.
+3. **Budget refusals cost turns.** The Market Researcher asked for more page reads in one parallel step than its budget of 5; 8 calls were refused. Stating the remaining budget in the task prompt is the next efficiency step.
+4. **Prompt tokens dominate again** (90 percent). The Review Analyst used 32.8k tokens for 5 calls because scraped pages are re-sent each turn.
+5. **Reason list repeats a fact** (gate reason plus R2 for the same shortfall). Harmless; could be merged.
+6. **Review quality.** 6 findings, all praise, all with ledger sources (4 reported, 2 quoted); the agent stated that no complaints were retrievable instead of inventing any.
+
+Added before the run (so the live test could distinguish reachability from evidence): the ledger now stores the page text the model was shown (bounded to 6,000 characters); a "verified" price is downgraded to `unknown` unless its amount appears in the stored text of its evidence URL (commas, `.00` and `Rs`/`₹` forms tolerated); link status is labelled "HTTP reachability only" in the UI and in the generated report section. Three tests added (169 total).
+
+Defects in this phase: (a) a generated driver script contained a stray control character from shell escaping and failed to start; no run or cost resulted, replaced with a plain script; (b) first draft of the amount matcher rejected `149.50` for 149.5, fixed with a trailing-zero tolerance; (c) one grounding fixture needed evidence text after the new rule.
+Budget used by the phase: exactly one paid run (L5) as approved; no retries.
+
+### Saved runs: persistence, selector and replay (M4 add-on)
+
+Requested after the L5 live test; no paid run was made for it.
+
+| Item | Implementation |
+|---|---|
+| Persistence | Already complete per run: `input.json`, `metadata.json` (status, usage, acceptance), `events.jsonl`, `evidence.json`, structured outputs, `grounding.json`, `validation.json`, `report.writer.md`, `report.md`/`report.pdf` or `-PARTIAL` pair (see `docs/REVIEWING_SAVED_RUNS.md`) |
+| Selector | **Saved research runs** select box in the left panel under the input card (layout unchanged); lists every readable run, newest first, with a state label |
+| Replay | Selecting a run restores workflow status per agent, results, quality evaluation, report preview, Behind the Scenes and downloads from disk. Completed-task count is rebuilt from the saved events |
+| Restart | State comes from files only; verified by a fresh manager with empty memory and by the real app on the real `runs/` |
+| Labels | VALIDATED, PARTIAL (failed acceptance), FAILED, CANCELLED, TIMED OUT, INTERRUPTED, LEGACY (not validated), RUNNING NOW |
+| Legacy runs | L1-L4 (pre-validation) are shown as saved drafts with an explicit banner; nothing is regenerated, validated or written; downloads say `(UNVALIDATED)` and no PDF is invented |
+| Zero calls | `saved_runs.py` and the replay path import no LLM, search or crew code paths; tests trap `build_llm`, `LLM.call`, Serper, page read and `run_sequential`, count executor calls and compare SHA-256 of every saved file before and after |
+| Disk reuse | Identical input now also matches a completed saved run after a restart (efficiency E-02): the saved result is shown and a new run needs an explicit "Run again" |
+| While running | The selector is disabled during a run, and the live run is labelled RUNNING NOW instead of INTERRUPTED |
+
+Saved-run decisions: read-only by construction (no write path); run ids are validated against
+path traversal; unreadable directories are skipped, not repaired; a run left `running` on disk is
+reported as interrupted, never as live.
+
+Defects found while building it: (1) the live run appeared as INTERRUPTED in the list because
+its metadata is only finalized at the end (fixed with an active-run override); (2) completed-task
+count was 0 for restored runs (rebuilt from events); (3) a test asserted option ids while
+Streamlit exposes the formatted labels (test corrected); (4) the headless browser needed the
+select box scrolled into view before clicking (driver only).
+
+Verification on the real `runs/` (five runs: L1, L2, L3, L4 and the M4 live run): all load,
+labels are PARTIAL (L5), CANCELLED (L3, L4) and LEGACY (L1, L2); a SHA-256 over all files was
+identical before and after listing, loading and browser selection; the real browser selection of
+a partial, a legacy and a cancelled run showed the right banners, workflow, downloads and
+Behind the Scenes. Tests: 181 passed (12 new); ruff clean.
+
+Environment note: a Streamlit on port 8501 was already running from the global Python
+(`...\Python311\python.exe -m streamlit run app.py`, started 13:52), not the project `.venv`.
+It was not touched; it should be restarted with the `.venv` interpreter to pick up this code.
+
+### Research Intelligence Cockpit: design prototype (approved; integrated below)
+
+Requested after the saved-run work. Production results UI is **not** replaced.
+
+| Item | Detail |
+|---|---|
+| Files | `ui/cockpit.py` (view), `prototype_cockpit.py` (isolated entry; removed at integration), cockpit CSS block in `ui/theme.py` (loaded only by the cockpit), `docs/COCKPIT.md` |
+| Production touch points | `research_tab.render()` gained optional `results_renderer`, `show_behind_the_scenes`, `blocked_note` (defaults reproduce the existing behaviour; a test asserts the production page has no cockpit markup) |
+| Data | Saved run L5 (`...140643-cold-pressed-juice-subscriptio-3824`), read from disk; no model, Serper or research call |
+| Areas | Executive summary, Competitor Landscape, Customer Voice, Market Opportunity, 30-Day Launch Roadmap, Evidence & Quality, Engineering Trace (collapsed) |
+| Honesty | Crew completion and report acceptance are separate chips; acceptance reasons appear once (de-duplicated); strategy and roadmap are labelled Recommendation / proposals; source links show provenance (page read, search result, not in ledger) |
+| Responsive | Verified at 1440 px and 390 px: no horizontal page scroll, pills wrap, cards and KPI tiles reflow |
+| Tests | `tests/test_cockpit.py` (14): roadmap and table parsing, source labelling and escaping, de-duplicated reasons, six areas switch content, Engineering Trace and full report collapsed, run button disabled, zero-call traps and file-hash comparison across all areas and reruns, legacy run rendering, production view unchanged. Full suite 195 passed, ruff clean |
+
+Defects found while prototyping: (1) pills clipped on the right (BaseWeb flex container did not wrap; CSS now targets the inner container); (2) strategy text in the takeaway was long and mixed with unrelated sentences (first sentence only, clipped at a word, leading article lowercased); (3) a regex replacement turned a helper into a recursive call (caught immediately by the test run); (4) channel tags contained whole sentences with URLs (cleaned and clipped); (5) inline "Week 1: research." was treated as a title (sentence versus label rule).
+
+Open design questions are listed in `docs/COCKPIT.md`. Nothing replaces the current results UI until approved.
+
+#### Cockpit review round 1 (user visual review; fixes applied to the prototype and shared layout CSS)
+
+| # | Review item | Change |
+|---|---|---|
+| 1 | Heading alignment | Root cause: the saved-run notice sat inside the center column and pushed only the workflow down. Notices now render in a keyed full-width container above the two-column row (structural), so both headings always share one top. Measured: 377.2 px for both at 1440 and 1280 |
+| 2 | Workflow | Cards, colours and events unchanged. Layout breakpoints changed so the four connected cards stay in one row at 1024 px and wider (panels stack at 1200 px; cards stack only below 820 px) |
+| 3 | Downloads | One bordered actions row directly under the summary card with a status label; two equal-width buttons (measured identical, 43 px high) that stay side by side down to 521 px |
+| 4 | Navigation | Same six pills; CSS-only: first four teal-outlined (business intelligence), last two violet with a small gap (trust and engineering); no headings, no extra row |
+| 5 | Report | Collapsed by default. Opening it: long URLs and cells wrap, tables scroll inside themselves on tablets and use a fixed wrapping layout on phones; no page-level horizontal scroll. Generated verification section now uses a list instead of a wide table for new runs (stored historical reports are untouched) |
+| 6 | Responsive validation | See table below |
+| 7 | Read-only | Unchanged; zero-call and file-hash tests extended (197 tests passed, ruff clean) |
+
+Responsive validation at 100 percent zoom (device scale 1, headless Edge; prototype at L5):
+
+| Width | Page h-scroll | Headings aligned | Workflow | Pills | Downloads (w x h) | Report opened: overflow |
+|---|---|---|---|---|---|---|
+| 1440 | none | 377.2 / 377.2 | 4 across | 1 row | 458x43, 458x43 | none |
+| 1280 | none | 377.2 / 377.2 | 4 across | 2 rows | 400x43, 400x43 | none |
+| 1024 | none | panels stacked | 4 across | 1 row | 464x43, 464x43 | none |
+| 768 | none | panels stacked | 1 column | 2 rows | 336x43, 336x43 | none |
+| 390 | none | panels stacked | 1 column | 3 rows | 337x43, 337x43 | none |
+
+Defects found during this round: (1) the two download columns inherited the page-level column
+stacking and became full width at 1024; fixed with a scoped override; (2) `overflow-wrap:anywhere`
+broke table cells letter by letter on phones; fixed with word wrapping in cells and anywhere only
+for links; (3) a wide Evidence column sat behind an inner scroll on phones; fixed with a fixed
+table layout and, for new runs, a list in the generated section.
+
+### Cockpit production integration (M4 completion; user-approved design)
+
+| Item | Result |
+|---|---|
+| Decisions applied | Pills may wrap (two rows at 1280 px, labels unchanged); cockpit replaces Results and Behind the Scenes; workflow, left panel and Saved runs selector unchanged; KPIs read "URLs discovered" and "Pages read"; full six-section report collapsed with Markdown and PDF downloads |
+| Reuse | The prototype's tested components were moved, not rebuilt: `research_tab.render()` now calls `cockpit.render(snap)` for every finished run (live or reopened). Shared trace content moved to `ui/trace.py`. Prototype entry `prototype_cockpit.py` removed; old `_render_results`, banner, quality and download code removed |
+| States | No run, running, stopping, completed validated, completed partial, failed, cancelled, timed out, no report and legacy all render (idle and running show a collapsed Engineering Trace; finished runs show the cockpit) |
+| Accuracy | Header has separate crew and acceptance chips; failed, cancelled, timed-out and partial-crew runs state their reason and error; KPI no longer labels discovered URLs as "sources retrieved" |
+| Zero calls | Viewing, navigation, saved-run switching, reruns and downloads: sentinels on `build_llm`, `LLM.call`, Serper, page read and crew execution; saved-run file hashes unchanged (tests and the real `runs/`) |
+| Responsive | Verified on the production app at 1440, 1280, 1024, 768 and 390 px (100 percent zoom) for the partial (L5), legacy and cancelled saved runs: no page-level horizontal scroll, no clipped text, equal download buttons, opened report without overflow |
+| Tests | 197 passed (suite), ruff clean. Old-UI tests were migrated to the cockpit (markdown/chips, collapsed expanders, Engineering Trace) instead of being deleted |
+| Defects and rework | KPI row left "Pages read" orphaned on a second row (grid now 6 columns, 3 on tablet, 2 on phone); reasons block previously could hide a failure reason for runs without validation (now stated); `ruff format` also reformatted older test files (formatting only) |
+
+### M4 engineering decisions
+1. Validate and tag the Writer's text instead of regenerating it: deterministic, free, and the original is kept for audit.
+2. Generated verification section is `###` under Sources so the six-section contract holds.
+3. Prices are judged against structured, ledger-grounded competitor data, not parsed from prose alone.
+4. An amount explicitly labelled unknown/unverified within a 70-character window is not a violation (found on real output; see defect 2).
+5. Blocked (401/403/429) is not broken: bot protection is common and says nothing about the link; it is reported.
+6. `report.md` is never written for a partial result; stale variants are removed.
+7. Link checks run once at finalization (bounded), not on every view, so viewing and reruns stay network-free.
+
+### M4 test results
+`ruff check .` clean; `pytest` 169 passed (40 new: validation 19, exports/links 6, flow and UI 12, evidence-text grounding 3 -- stable across two consecutive runs); previous suites unchanged except fixtures (competitors now three verified prices; pass and partial report fixtures).
+
+Offline re-validation of the stored live runs (copies; no network, no model): L1 and L2 both `partial_failed_acceptance` because only 1 competitor has a verified price (gate needs 3); all structural rules passed. This is the truthful outcome for those runs, not a validator fault.
+
+### M4 defects and resolutions
+| # | Defect | Resolution |
+|---|---|---|
+| 1 | Per-agent efficiency table (added in `d9ea22e`) mixed ints and the string "unavailable" in one column; pyarrow raised and the results UI would have crashed once events carried tokens | Column always string; regression caught by the new UI test |
+| 2 | R4 false positive on real L2 output: the Writer wrote "unknown; search-result amounts Rs 199 and Rs 249 were not reliably attributable" and the rule failed it | Amounts labelled unknown/unverified/not attributable within a short window are acknowledged; unlabelled amounts still fail and are tagged |
+| 3 | `TTFFont` import error (reportlab class is `TTFont`) | Import corrected |
+| 4 | Run reported finished before artifacts existed (flaky restore test) | Fixed in the efficiency follow-up; M4 relies on it |
+| 5 | Tests initially expected tag position wrong ("amount **[unverified price]** per box") and a link-limit boundary off by one | Test expectations corrected, behaviour unchanged |
+| 6 | Escaped newline written literally into a test fixture by an editing slip | Fixture corrected |
+| 7 | PDF blockquote header collapsed its list into one paragraph | Bulleted lines preserved with line breaks |
+
+Rework cycles: 3 (R4 acknowledgement, PDF font/import and header formatting, fixture and test corrections). Known limits: link checks were not exercised against the real network (disabled in tests); a fresh live run is needed to see real link statuses and a real new PDF; the Writer's free-form table is parsed by header-agnostic row matching (competitor name in a row), so unusual layouts could fail R2/R4 and would then be flagged, not passed.
+
+## Requirements carried into M5+ (unchanged)
+- Hierarchical Manager delegation using the same `AgentState` contract and the same validators (M5).
+- Deck from the validated report only; partial reports refused (M6). Weekly deterministic-first reruns (M7).
 
 ## Open items
 - `INITIAL.md` still has uncommitted user edits (path corrected only).

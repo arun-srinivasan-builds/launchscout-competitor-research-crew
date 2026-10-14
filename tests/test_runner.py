@@ -40,12 +40,22 @@ def test_complete_run_collects_outputs_and_artifacts(tmp_path):
     assert snap.competitors.competitors[0].price.status == "verified"
     assert snap.report_markdown and not snap.unsupported_report_urls
     root = run.paths.root
-    for name in ("events.jsonl", "metadata.json", "competitors.json", "evidence.json",
-                 "report.md", "grounding.json"):
+    for name in (
+        "events.jsonl",
+        "metadata.json",
+        "competitors.json",
+        "evidence.json",
+        "report.md",
+        "report.pdf",
+        "report.writer.md",
+        "validation.json",
+        "grounding.json",
+    ):
         assert (root / name).is_file(), name
     metadata = json.loads((root / "metadata.json").read_text(encoding="utf-8"))
     assert metadata["status"] == "complete"
-    assert metadata["acceptance"]["result"] == "not_evaluated"
+    assert metadata["acceptance"]["result"] == "pass"
+    assert snap.report_state == "validated_pass"
     assert snap.usage.basis == "measured" and snap.usage.total_tokens == 480
     assert snap.usage.serper_calls == 1 and snap.usage.cache_hits == 2
 
@@ -119,9 +129,7 @@ def test_crew_error_before_any_output_is_failed(tmp_path):
 
 
 def test_failure_midway_is_partial_not_complete(tmp_path):
-    manager = make_manager(
-        tmp_path, executor=make_executor(fail_after="Customer review analysis")
-    )
+    manager = make_manager(tmp_path, executor=make_executor(fail_after="Customer review analysis"))
     run = manager.start(INPUT)
     snap = wait_finished(manager, run.paths.run_id)
     assert snap.status == "partial"

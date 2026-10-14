@@ -42,8 +42,9 @@ def test_event_mapping_active_tool_complete_failed():
     ]
     states = reduce_events(log, run_active=True)
     assert states["market_researcher"].status is AgentStatus.COMPLETE
-    assert states["market_researcher"].tool_calls and "search_the_web" in (
-        states["market_researcher"].tool_calls[0]
+    assert (
+        states["market_researcher"].tool_calls
+        and "search_the_web" in (states["market_researcher"].tool_calls[0])
     )
     assert states["review_analyst"].status is AgentStatus.FAILED
     assert states["strategy_analyst"].status is AgentStatus.ACTIVE

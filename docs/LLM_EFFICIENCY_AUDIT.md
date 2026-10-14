@@ -36,6 +36,24 @@ Observed range for the same input: 53k-74k tokens (a 28% spread).
 Per-agent **tokens** were not recorded per call in M3 (only run totals), so they cannot be
 attributed to agents from these logs. Instrumentation added after the audit (below) closes this gap.
 
+### Run L5 (M4 live acceptance; the first with per-agent tokens)
+
+| Metric | Value |
+|---|---|
+| Input | Cold-pressed juice subscription / Pune / gym-goers aged 20-35 |
+| Outcome | `status=complete`, acceptance fail (2 competitors with evidence, 0 verified prices) |
+| LLM calls | 13 (Market Researcher 5, Review Analyst 5, Strategy Analyst 1, Report Writer 2) |
+| Tokens | 69,095 (61,872 prompt + 7,223 completion) |
+| Tokens per agent | Market Researcher 22,847; Review Analyst 32,816; Strategy Analyst 3,111; Report Writer 10,321 |
+| Tools | 12 searches, 10 page reads, 2 cache answers, 9 budget refusals, 1 read error |
+| Latency (task seconds) | 33.7 / 24.7 / 15.0 / 33.7 |
+| Post-run actions | 3 fresh page loads and 2 download rounds: 0 events appended, no file changed |
+
+Compared with L2 (53,462 tokens, 10 calls) L5 spent 29 percent more tokens for a weaker evidence
+result (no verified price). Variance across inputs is large, so the per-agent figures, not the
+totals, are the useful baseline: the Review Analyst is the largest consumer (47 percent) because
+scraped pages are re-sent on every turn.
+
 ## Findings
 
 | # | Finding | Evidence | Impact |
@@ -83,6 +101,16 @@ repeats research; every standard has an automated test.
 | M7 | Weekly rerun re-checks prices of already-known competitors by deterministic fetch + price extraction first; invoke the model only for new-competitor discovery or when extraction fails; diff is pure Python | Largest recurring saving; snapshot diff makes zero model calls |
 | M7 | Cross-run evidence cache keyed by URL with a freshness window; reuse unchanged pages | Fewer page reads on reruns; staleness must be labelled |
 | M8 | Re-measure on the sample and alternate inputs; record before/after per agent; ship only changes that do not reduce verified-price coverage or sourced-finding counts | Quality-preserving gate |
+
+## M4 efficiency result
+- Validation, tagging, link status, Markdown and PDF generation, the quality evaluation and
+  downloads are pure Python: **0 model calls, 0 searches** (tests with `build_llm` and
+  `crewai.LLM.call` sentinels; AST import scan of every report module).
+- Reuse: the report is assembled from the stored ledger and structured outputs; pages read during
+  research are not requested again for link status (E-05).
+- Unchanged: the Report Writer agent still costs 2-3 model calls (15 to 27 percent of a run's
+  calls in L1-L3). Replacing it with deterministic assembly would save those calls and their prompt tokens,
+  but the assignment requires the agent, so this is a decision for the user, not an automatic change.
 
 ## Quality guard
 Efficiency changes are accepted only if, on the same inputs, they do not reduce: number of
