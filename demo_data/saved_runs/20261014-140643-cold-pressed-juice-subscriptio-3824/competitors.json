@@ -1,0 +1,61 @@
+{
+  "competitors": [
+    {
+      "name": "Earth Organic Juices",
+      "url": "https://www.instagram.com/earthorganicjuice/",
+      "location_relevance": "Public listings describe delivery across Pune and PCMC, including Baner, Balewadi and Pashan; subscription availability is also stated. (https://www.reddit.com/r/PCMC/comments/1o2ow45/just_launched_earth_organic_juices_in_pune/)",
+      "offer": "Cold-pressed juices with weekly and monthly subscriptions; a 3-day trial is advertised. (https://www.reddit.com/r/PCMC/comments/1o2ow45/just_launched_earth_organic_juices_in_pune/)",
+      "price": {
+        "status": "unknown",
+        "amount": null,
+        "currency": null,
+        "unit": null,
+        "pack_size": null,
+        "evidence_url": null,
+        "accessed_on": null
+      },
+      "channels": [
+        "Instagram",
+        "WhatsApp ordering is advertised in a Facebook post (https://www.facebook.com/Earthorganicjuices/posts/fresh-cold-pressed-juice-at-your-door-before-7-amtry-our-3-day-trial-for-297-del/1406172155030581/)"
+      ],
+      "evidence_urls": [
+        "https://www.instagram.com/earthorganicjuice/",
+        "https://www.reddit.com/r/PCMC/comments/1o2ow45/just_launched_earth_organic_juices_in_pune/",
+        "https://www.facebook.com/Earthorganicjuices/posts/fresh-cold-pressed-juice-at-your-door-before-7-amtry-our-3-day-trial-for-297-del/1406172155030581/"
+      ],
+      "accessed_on": "2026-10-14",
+      "unknowns": [
+        "Price is unknown because the retrieved page-reading evidence did not verify an amount.",
+        "Exact current delivery coverage and subscription terms are unknown."
+      ]
+    },
+    {
+      "name": "iBites",
+      "url": "https://ibites.in/pune/online-juice-delivery",
+      "location_relevance": "Its Pune delivery page lists coverage across central, west and east Pune, with named areas including Baner, Kothrud, Viman Nagar, Hinjawadi and Hadapsar. (https://ibites.in/pune/online-juice-delivery)",
+      "offer": "Cold-pressed juices, wellness shots and smoothies; the page states juices are pressed after ordering and a daily morning subscription is available. (https://ibites.in/pune/online-juice-delivery)",
+      "price": {
+        "status": "unknown",
+        "amount": null,
+        "currency": null,
+        "unit": null,
+        "pack_size": null,
+        "evidence_url": null,
+        "accessed_on": null
+      },
+      "channels": [
+        "Website menu",
+        "WhatsApp ordering; the page says no app or account is needed (https://ibites.in/pune/online-juice-delivery)"
+      ],
+      "evidence_urls": [
+        "https://ibites.in/pune/online-juice-delivery"
+      ],
+      "accessed_on": "2026-10-14",
+      "unknowns": [
+        "Price is unknown because the retrieved Pune delivery page did not state an amount."
+      ]
+    }
+  ],
+  "notes": "Found two competitors with public evidence of cold-pressed juice offers serving Pune; both have subscription relevance. Price is marked unknown where no retrieved page reading verified an amount.",
+  "shortfall_reason": "Fewer than three competitors could be supported with retrieved public-page evidence specific to the target market. Other search results were not sufficient to verify Pune relevance and a cold-pressed juice offer."
+}

@@ -1,0 +1,109 @@
+{
+  "slides": [
+    {
+      "title": "Idea & Market",
+      "bullets": [
+        "Cold-pressed juice subscription in Pune.",
+        "Target customers: gym-goers aged 20-35.",
+        "Research evidence status: partial; report failed acceptance."
+      ],
+      "notes": "Idea, city, target customer and evidence status are as supplied in the research facts.",
+      "source_refs": [
+        "Report: idea"
+      ],
+      "labels": [
+        "PARTIAL EVIDENCE: the source report failed acceptance",
+        "Evidence: 2 competitor(s) researched, 0 verified price(s)"
+      ]
+    },
+    {
+      "title": "Competitor Landscape",
+      "bullets": [
+        "iBites: Cold-pressed juices, wellness shots and smoothies, pressed after ordering; its surfaced daily plan says the same juice each morning.",
+        "iBites: Price unknown (not verified); website/menu and WhatsApp ordering.",
+        "Earth Organic Juices: Search results describe cold-pressed juices, weekly subscriptions, early-morning delivery and a three-day trial.",
+        "Earth Organic Juices: Price unknown (not verified); Instagram and WhatsApp advertised in a search result."
+      ],
+      "notes": "The Earth Organic Juices offer details are reported from search results; its Facebook page could not be retrieved. Prices are not verified. Channels are as stated in the research facts.",
+      "source_refs": [
+        "https://ibites.in/pune/online-juice-delivery",
+        "https://ibites.in/pune/cold-pressed-juice",
+        "https://www.instagram.com/earthorganicjuice/",
+        "https://www.facebook.com/Earthorganicjuices/posts/fresh-cold-pressed-juice-at-your-door-before-7-amtry-our-3-day-trial-for-297-del/1406172155030581/"
+      ],
+      "labels": [
+        "PARTIAL EVIDENCE: the source report failed acceptance",
+        "Price unknown / not verified: iBites, Earth Organic Juices"
+      ]
+    },
+    {
+      "title": "Customer Pain Points",
+      "bullets": [
+        "iBites: No verifiable customer complaints were retrieved; independent review or ratings-page sentiment is unknown.",
+        "Earth Organic Juices: No verifiable customer complaints were retrieved; independent sentiment is unknown, and Instagram content was not readable."
+      ],
+      "notes": "The available customer findings are praise from company websites, not verified complaints. Earth Organic Juices' Facebook post could not be read; Instagram content was not readable.",
+      "source_refs": [
+        "https://ibites.in/",
+        "https://earthorganicjuices.com/",
+        "https://www.instagram.com/earthorganicjuice/",
+        "https://www.facebook.com/Earthorganicjuices/posts/fresh-cold-pressed-juice-at-your-door-before-7-amtry-our-3-day-trial-for-297-del/1406172155030581/"
+      ],
+      "labels": [
+        "PARTIAL EVIDENCE: the source report failed acceptance",
+        "Customer comments are attributed per source; unverified where noted"
+      ]
+    },
+    {
+      "title": "Market Gap",
+      "bullets": [
+        "Research-visible opportunity, not a claim of exclusivity: clearly state the per-juice price and pack size.",
+        "Make weekly choice or rotation terms explicit; iBites' surfaced daily plan describes the same juice each morning.",
+        "Earth Organic Juices' weekly-plan variety terms are unknown."
+      ],
+      "notes": "This is the report's stated opportunity based on available evidence; it does not establish that no competitor offers these features.",
+      "source_refs": [
+        "Strategy: recommendation",
+        "https://ibites.in/pune/online-juice-delivery",
+        "https://www.instagram.com/earthorganicjuice/"
+      ],
+      "labels": [
+        "PARTIAL EVIDENCE: the source report failed acceptance",
+        "Assumption: the gap is an inference from this research, not a market size"
+      ]
+    },
+    {
+      "title": "Positioning & Price",
+      "bullets": [
+        "Recommendation: “A Pune cold-pressed juice subscription with clear per-juice pricing and a week of choice or planned variety.”",
+        "Recommended price: ₹699 for a seven-day plan of one juice per day (about ₹100 per juice); this is a recommendation, not a verified price.",
+        "Specify serving size and delivery terms before sale; confirm serviceable areas before advertising them."
+      ],
+      "notes": "The positioning and price are recommendations in the report. The proposed price is not a verified market price; serving size and delivery terms remain to be specified.",
+      "source_refs": [
+        "Strategy: recommendation"
+      ],
+      "labels": [
+        "PARTIAL EVIDENCE: the source report failed acceptance",
+        "Recommendation (not a verified market price): ₹699 for a seven-day plan of one juice per day (about ₹100 per juice); proposed price only, with serving size and delivery terms to be specified before sale."
+      ]
+    },
+    {
+      "title": "30-Day Launch Plan",
+      "bullets": [
+        "Week 1: Confirm feasibility, service areas, serving size and delivery terms; decide choice or rotation; validate the proposed ₹699 test price.",
+        "Week 2: Prepare an offer page with price, serving size, schedule, choice/rotation and service area; invite a small test group and adjust from feedback.",
+        "Week 3: Run a limited pilot with consenting customers in confirmed areas; track orders, repeat intent, delivery reliability and reported feedback.",
+        "Week 4: Review pilot and test-price response; revise the offer based on results and feasibility; expand promotion only where coverage and terms are confirmed."
+      ],
+      "notes": "These are proposed actions from the report's launch plan, not claims about completed research or existing operations.",
+      "source_refs": [
+        "Report: launch plan"
+      ],
+      "labels": [
+        "PARTIAL EVIDENCE: the source report failed acceptance",
+        "Recommended actions, not completed or verified facts"
+      ]
+    }
+  ]
+}

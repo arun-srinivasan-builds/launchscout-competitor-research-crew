@@ -1,0 +1,31 @@
+{
+  "comparison_matrix": [
+    {
+      "competitor": "Earth Organic Juices",
+      "price": "Unknown in the retrieved research.",
+      "channel": "Instagram and WhatsApp ordering.",
+      "strength": "Offers cold-pressed juice subscriptions and advertises a 3-day trial. Customer-facing feedback praises fresh taste and early-morning delivery.",
+      "weakness": "Evidence limitation: the retrieved sources do not verify its current subscription price or exact terms and delivery coverage. No explicit customer complaint was retrieved."
+    },
+    {
+      "competitor": "iBites",
+      "price": "Unknown in the retrieved research.",
+      "channel": "Website menu and WhatsApp ordering.",
+      "strength": "Offers cold-pressed juices, wellness shots and smoothies; its Pune page says juices are pressed after ordering and a daily morning subscription is available. Its reviews page reports positive feedback on freshness and punctual delivery.",
+      "weakness": "Evidence limitation: the retrieved Pune page does not state a price. The cited customer feedback is on iBites’ own reviews page, and no explicit customer complaint was retrieved."
+    }
+  ],
+  "market_gap": "A specific, evidence-grounded opportunity is to make the subscription offer easy to evaluate upfront: publish a clear weekly bundle price, bottle size, delivery schedule and covered areas together. The retrieved research confirms subscription relevance for both competitors but does not verify comparable subscription prices; this is an opportunity based on the available evidence, not a claim that competitors do not publish those details elsewhere.",
+  "evidence_refs": [
+    "https://www.reddit.com/r/PCMC/comments/1o2ow45/just_launched_earth_organic_juices_in_pune/",
+    "https://www.facebook.com/Earthorganicjuices/posts/fresh-cold-pressed-juice-at-your-door-before-7-amtry-our-3-day-trial-for-297-del/1406172155030581/",
+    "https://www.justdial.com/Pune/Earth-Organic-Juices-Near-Nakhate-Petrol-Pump-Kalewadi/020PXX20-XX20-210904130536-Q7E2_BZDET/reviews",
+    "https://ibites.in/pune/online-juice-delivery",
+    "https://ibites.in/reviews"
+  ],
+  "recommended_offer": "A clearly itemized weekly subscription: five 250 ml cold-pressed juices, with the price, delivery schedule and eligible delivery areas stated before checkout.",
+  "positioning_line": "Fresh-pressed mornings, with a weekly juice plan and delivery details you can see upfront.",
+  "recommended_price": "₹799 per five-bottle weekly pack (250 ml per bottle). This is a proposed test price, not a researched competitor or market price.",
+  "rationale": "Both researched competitors have subscription-related offers, and available customer feedback for each praises freshness; Earth Organic Juices feedback also mentions early-morning delivery. A transparent, easy-to-compare bundle could differentiate the offer in presentation without implying that the underlying service is absent from the market. Evidence is thin on actual competitor prices, current plan inclusions, customer complaints and willingness to pay, so the proposed price should be tested with customers before being treated as validated.",
+  "price_label": "recommendation"
+}

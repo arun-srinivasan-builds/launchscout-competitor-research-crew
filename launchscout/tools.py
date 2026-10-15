@@ -324,6 +324,9 @@ def _no_live() -> None:
 
 
 def _default_search(query: str, n_results: int) -> list[dict[str, Any]]:
+    from launchscout.demo import require_live
+
+    require_live("Web search")
     _no_live()
     from crewai_tools import SerperDevTool
 
@@ -338,6 +341,9 @@ def _default_search(query: str, n_results: int) -> list[dict[str, Any]]:
 
 
 def _default_scrape(url: str) -> str:
+    from launchscout.demo import require_live
+
+    require_live("Web page reading")
     _no_live()
     from crewai_tools import ScrapeWebsiteTool
 

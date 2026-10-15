@@ -95,6 +95,9 @@ def check_model(
 
 
 def main() -> int:
+    from launchscout.demo import require_live
+
+    require_live("The live model check")
     settings = load_settings()
     result = check_model(settings)
     sys.stdout.write(

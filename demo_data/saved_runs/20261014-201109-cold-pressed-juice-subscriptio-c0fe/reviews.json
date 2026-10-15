@@ -1,0 +1,69 @@
+{
+  "findings": [
+    {
+      "competitor": "iBites",
+      "kind": "praise",
+      "text": "“The flavor is incredibly refreshing and blends perfectly. I've noticed a significant boost in my energy since I started using it!” — attributed on iBites’ website to Priya S.",
+      "basis": "quoted",
+      "source_url": "https://ibites.in/"
+    },
+    {
+      "competitor": "iBites",
+      "kind": "praise",
+      "text": "“The crisp citrus flavor is exactly what I need. Perfectly balanced, not too sweet, and gives me clean, natural energy without crashes.” — attributed on iBites’ website to Rahul M.",
+      "basis": "quoted",
+      "source_url": "https://ibites.in/"
+    },
+    {
+      "competitor": "iBites",
+      "kind": "praise",
+      "text": "“Makes me feel healthy & more energetic right from the jump. It's such an easy way to ensure I'm getting my daily nutrients!” — attributed on iBites’ website to Sneha K.",
+      "basis": "quoted",
+      "source_url": "https://ibites.in/"
+    },
+    {
+      "competitor": "iBites",
+      "kind": "praise",
+      "text": "“Exactly what I've been looking for. The flavors are perfectly blended and I can feel the freshness in every sip. Essential!” — attributed on iBites’ website to Amit D.",
+      "basis": "quoted",
+      "source_url": "https://ibites.in/"
+    },
+    {
+      "competitor": "Earth Organic Juices",
+      "kind": "praise",
+      "text": "“The flavor was incredibly fresh and natural, with the perfect balance of sweetness and tartness. You can really taste the quality ingredients…” — attributed on the company website to Preeti Dhanve, who says she tried the juices.",
+      "basis": "quoted",
+      "source_url": "https://earthorganicjuices.com/"
+    },
+    {
+      "competitor": "Earth Organic Juices",
+      "kind": "praise",
+      "text": "The company website features a testimonial attributed to Shivlal Chavan praising the juices as free of preservatives and saying this gives him peace of mind about consuming a natural product.",
+      "basis": "reported",
+      "source_url": "https://earthorganicjuices.com/"
+    },
+    {
+      "competitor": "Earth Organic Juices",
+      "kind": "praise",
+      "text": "A testimonial attributed to Saraswati Gujiri says she has tried all the juices, likes their texture and taste, and recommends them; she also praises the use of natural, fresh vegetables and the absence of concentrates or preservatives.",
+      "basis": "reported",
+      "source_url": "https://earthorganicjuices.com/"
+    },
+    {
+      "competitor": "Earth Organic Juices",
+      "kind": "praise",
+      "text": "A testimonial attributed to Mrunal Bijwe says she has been drinking the brand’s amla juice for close to a year and personally found it useful for health.",
+      "basis": "reported",
+      "source_url": "https://earthorganicjuices.com/"
+    }
+  ],
+  "per_competitor_summary": [
+    "iBites: Its website displays four positive testimonials attributed to named customers. The retrieved page contains no customer complaints; independent verification of the testimonials is unknown. No complaint is included.",
+    "Earth Organic Juices: Its website displays four positive customer testimonials, including one extended-use account. The retrieved page contains no customer complaints; independent verification of the testimonials is unknown. No complaint is included."
+  ],
+  "gaps": [
+    "No verifiable customer complaints were retrieved for either competitor.",
+    "iBites praise found in this research is on the company’s own website; independent review or ratings-page sentiment is unknown.",
+    "Earth Organic Juices praise found in this research is on the company’s own website; independent review or ratings-page sentiment is unknown. The Facebook post could not be read, and Instagram content was not readable."
+  ]
+}

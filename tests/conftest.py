@@ -25,6 +25,7 @@ def make_manager(tmp_path, **kwargs) -> RunManager:
 @pytest.fixture(autouse=True)
 def isolated_manager(tmp_path, monkeypatch):
     monkeypatch.setenv("LAUNCHSCOUT_NO_LIVE", "1")
+    monkeypatch.setenv("LAUNCHSCOUT_MODE", "live")  # app default is demo; tests inject fakes
     manager = make_manager(tmp_path)
     set_manager(manager)
     yield manager

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from launchscout.config import MODEL_ENV, Settings
+from launchscout.demo import require_live
 
 
 class ConfigError(RuntimeError):
@@ -18,6 +19,7 @@ def crewai_model_string(model_name: str) -> str:
 
 def build_llm(settings: Settings) -> Any:
     """Build a CrewAI LLM using exactly the configured model name."""
+    require_live("Model access")
     if settings.model_name is None:
         raise ConfigError(f"{MODEL_ENV} is not set; refusing to pick a default model.")
     if settings.openai_api_key is None:

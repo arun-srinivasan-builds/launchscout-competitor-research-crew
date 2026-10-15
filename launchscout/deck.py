@@ -18,6 +18,7 @@ from typing import Any
 from pydantic import BaseModel, Field, ValidationError
 
 from launchscout.config import Settings
+from launchscout.demo import require_live
 from launchscout.evidence import EvidenceEntry, normalize_url
 from launchscout.logging_utils import get_logger
 from launchscout.schemas import (
@@ -473,6 +474,8 @@ def generate_deck(
     source: DeckSource, settings: Settings | None = None, kickoff: Kickoff | None = None
 ) -> DeckResult:
     """One agent call (injected in tests), then deterministic claim check and labels."""
+    if kickoff is None:
+        require_live("Pitch deck generation")
     if kickoff is None:
         if settings is None:
             raise DeckRefused("Settings are required to generate a deck.")

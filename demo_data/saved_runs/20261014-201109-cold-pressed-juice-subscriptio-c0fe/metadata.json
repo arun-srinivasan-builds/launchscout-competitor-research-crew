@@ -1,0 +1,29 @@
+{
+  "run_id": "20261014-201109-cold-pressed-juice-subscriptio-c0fe",
+  "mode": "hierarchical",
+  "model_name": "gpt-6-luna",
+  "started_at": "2026-10-14T14:41:09.871610Z",
+  "finished_at": "2026-10-14T14:44:07.846186Z",
+  "status": "complete",
+  "error": null,
+  "acceptance": {
+    "result": "fail",
+    "reasons": [
+      "only 2 competitor(s) have a name, URL and evidence URL (3 required)",
+      "only 0 competitor(s) have a verified price with evidence (3 required)",
+      "R2 At least 3 competitor rows: 2 competitor row(s) in the Key Competitors table (3 required).",
+      "R3 Every URL in the report was returned by a tool: 1 URL(s) were never returned by any tool.",
+      "R7 Sources cover every competitor and verified price: 1 source(s) missing from the Sources section."
+    ]
+  },
+  "usage": {
+    "basis": "measured",
+    "total_tokens": 75446,
+    "prompt_tokens": 60147,
+    "completion_tokens": 15299,
+    "serper_calls": 12,
+    "scrape_calls": 9,
+    "cache_hits": 6,
+    "llm_calls": 18
+  }
+}

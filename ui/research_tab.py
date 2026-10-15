@@ -12,6 +12,7 @@ import html
 
 import streamlit as st
 
+from launchscout.demo import DEMO_NOTICE, DemoModeError, is_demo
 from launchscout.inputs import InputValidationError, validate_input
 from launchscout.progress import active_links, replay_states
 from launchscout.runner import RunManager, RunSnapshot, get_manager
@@ -278,7 +279,12 @@ def _render_input_panel(
             help="Sequential runs the four specialists in order. Hierarchical adds a Manager "
             "agent that delegates each task to the same four specialists (more model calls).",
         )
-        submitted = st.button("Run Research", type="primary", key="run_research", disabled=active)
+        demo = is_demo()
+        submitted = st.button(
+            "Run Research", type="primary", key="run_research", disabled=active or demo
+        )
+        if demo:
+            st.caption("Public demo: live research is disabled. Pick a saved run below.")
         cancelled = False
         if active:
             cancelled = st.button("Cancel run", key="cancel_run")
@@ -294,6 +300,8 @@ def _render_saved_selector(manager: RunManager, active: bool) -> str | None:
         st.caption("Saved research runs: none yet. Completed runs are kept under runs/.")
         return None
     by_id: dict[str, SavedRunSummary] = {r.run_id: r for r in runs}
+    if is_demo() and SAVED_SELECT_KEY not in st.session_state:
+        st.session_state[SAVED_SELECT_KEY] = runs[0].run_id  # demo opens on a saved run
 
     def title(run_id: str) -> str:
         return "Current session / latest run" if run_id == "" else by_id[run_id].title
@@ -314,6 +322,9 @@ def _render_saved_selector(manager: RunManager, active: bool) -> str | None:
 
 def _handle_submit(mode: ResearchMode, fields: Fields, notices: list[tuple[str, str]]) -> None:
     idea, city, customer, known = fields
+    if is_demo():
+        notices.append(("warning", DEMO_NOTICE))
+        return
     try:
         research_input = validate_input(idea, city, customer, known, mode)
     except InputValidationError as exc:
@@ -334,7 +345,11 @@ def _handle_submit(mode: ResearchMode, fields: Fields, notices: list[tuple[str, 
     if missing:
         notices.append(("error", "Missing configuration: " + ", ".join(missing)))
         return
-    run = manager.start(research_input)
+    try:
+        run = manager.start(research_input)
+    except DemoModeError as exc:
+        notices.append(("warning", str(exc)))
+        return
     if run is None:
         notices.append(("warning", "A research run is already in progress; wait for it to end."))
         return

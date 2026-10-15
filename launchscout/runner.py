@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from launchscout.config import RunLimits, Settings, load_settings
 from launchscout.crew import run_crew
+from launchscout.demo import configured_runs_dir, require_live
 from launchscout.events import EventCollector, load_events, set_active_collector
 from launchscout.evidence import EvidenceEntry, EvidenceLedger
 from launchscout.grounding import (
@@ -319,7 +320,9 @@ class RunManager:
     # -- queries ---------------------------------------------------------------------------
     def runs_dir(self) -> Path:
         """Directory holding saved runs for this manager."""
-        return self._runs_dir if self._runs_dir is not None else DEFAULT_RUNS_DIR
+        if self._runs_dir is not None:
+            return self._runs_dir
+        return configured_runs_dir() or DEFAULT_RUNS_DIR
 
     def settings(self) -> Settings:
         """Current settings (same loader the runs use)."""
@@ -356,7 +359,11 @@ class RunManager:
 
     # -- commands --------------------------------------------------------------------------
     def start(self, research_input: ResearchInput) -> ResearchRun | None:
-        """Start a run, or return None if one is already active (duplicate prevention)."""
+        """Start a run, or return None if one is already active (duplicate prevention).
+
+        Raises `DemoModeError` in public demo mode: no run can be started there.
+        """
+        require_live("Starting a research run")
         with self._lock:
             for run_id in self._order:
                 existing = self._runs[run_id]

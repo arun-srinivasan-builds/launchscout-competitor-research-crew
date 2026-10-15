@@ -16,6 +16,7 @@ from launchscout.agents import (
     build_manager,
 )
 from launchscout.config import RunLimits, Settings
+from launchscout.demo import require_live
 from launchscout.events import install_listeners
 from launchscout.llm import build_llm
 from launchscout.schemas import ResearchInput, ResearchMode
@@ -105,6 +106,7 @@ def run_crew(
     on_task_output: OnTaskOutput | None = None,
 ) -> Any:
     """Run the crew to completion in the calling (worker) thread; returns CrewAI's output."""
+    require_live("Crew execution")
     _quiet_telemetry()
     install_listeners()
     llm = build_llm(settings)  # the single, configured MODEL_NAME client for every agent

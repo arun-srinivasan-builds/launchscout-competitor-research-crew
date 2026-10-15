@@ -1,0 +1,63 @@
+{
+  "competitors": [
+    {
+      "name": "iBites",
+      "url": "https://ibites.in/pune/online-juice-delivery",
+      "location_relevance": "The page describes juice delivery across Pune and lists areas including Baner, Kothrud, Viman Nagar, Hinjawadi and Pune Camp.",
+      "offer": "Cold-pressed juices, wellness shots and smoothies, pressed after ordering; the page says a daily subscription is available, with the same juice delivered each morning.",
+      "price": {
+        "status": "unknown",
+        "amount": null,
+        "currency": null,
+        "unit": null,
+        "pack_size": null,
+        "evidence_url": null,
+        "accessed_on": null
+      },
+      "channels": [
+        "Website ordering/menu",
+        "WhatsApp ordering"
+      ],
+      "evidence_urls": [
+        "https://ibites.in/pune/online-juice-delivery",
+        "https://ibites.in/pune/cold-pressed-juice"
+      ],
+      "accessed_on": "2026-10-14",
+      "unknowns": [
+        "A price is mentioned on the cold-pressed juice page as starting at ₹25, but no unit or pack size is stated, so it is not recorded as a verified unit price.",
+        "Gym-goer focus is not evidenced."
+      ]
+    },
+    {
+      "name": "Earth Organic Juices",
+      "url": "https://www.instagram.com/earthorganicjuice/",
+      "location_relevance": "Search result describes it as a Pune cold-pressed juice delivery business; a public listing says delivery across Pune and PCMC. The Instagram page itself could not be read beyond its title.",
+      "offer": "Search result describes cold-pressed juices and weekly subscriptions; another public result advertises early-morning delivery and a three-day trial.",
+      "price": {
+        "status": "unknown",
+        "amount": null,
+        "currency": null,
+        "unit": null,
+        "pack_size": null,
+        "evidence_url": null,
+        "accessed_on": null
+      },
+      "channels": [
+        "Instagram",
+        "WhatsApp (advertised in search result)"
+      ],
+      "evidence_urls": [
+        "https://www.instagram.com/earthorganicjuice/",
+        "https://www.facebook.com/Earthorganicjuices/posts/fresh-cold-pressed-juice-at-your-door-before-7-amtry-our-3-day-trial-for-297-del/1406172155030581/"
+      ],
+      "accessed_on": "2026-10-14",
+      "unknowns": [
+        "A search-result snippet advertises ₹297 for a three-day trial, but the underlying Facebook page could not be retrieved, so price is unverified.",
+        "Specific Pune delivery neighborhoods are not confirmed from a successfully read page.",
+        "Gym-goer focus is not evidenced."
+      ]
+    }
+  ],
+  "notes": "Found two Pune-relevant competitors with public evidence in the available search/read budget. Search-result snippets also surfaced possible businesses, but insufficient retrievable evidence was available to establish further competitors. Search-result claims were treated as unverified where their pages could not be read.",
+  "shortfall_reason": "Fewer than three competitors could be supported with sufficient public evidence within the six-search and five-page-read limit."
+}

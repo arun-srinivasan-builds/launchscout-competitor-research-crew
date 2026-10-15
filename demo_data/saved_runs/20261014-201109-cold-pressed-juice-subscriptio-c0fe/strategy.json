@@ -1,0 +1,31 @@
+{
+  "comparison_matrix": [
+    {
+      "competitor": "iBites",
+      "price": "Unknown. A page mentions starting at ₹25, but no unit or pack size is given, so this is not a verified unit price. https://ibites.in/pune/online-juice-delivery ; https://ibites.in/pune/cold-pressed-juice",
+      "channel": "Website ordering/menu and WhatsApp ordering. https://ibites.in/pune/online-juice-delivery ; https://ibites.in/pune/cold-pressed-juice",
+      "strength": "Describes Pune delivery, including Baner, Kothrud, Viman Nagar, Hinjawadi and Pune Camp; offers cold-pressed juices, wellness shots and smoothies pressed after ordering. Its daily subscription is described as delivering the same juice each morning. Four testimonials on its own website praise flavor, freshness or energy; independent verification is unknown. https://ibites.in/pune/online-juice-delivery ; https://ibites.in/pune/cold-pressed-juice ; https://ibites.in/",
+      "weakness": "A verified unit price and pack size are unavailable in the supplied research. The surfaced daily-plan description says the same juice is delivered each morning; other subscription-choice details are unknown. No complaints were retrieved, and the testimonials are not independently verified. https://ibites.in/pune/online-juice-delivery ; https://ibites.in/pune/cold-pressed-juice ; https://ibites.in/"
+    },
+    {
+      "competitor": "Earth Organic Juices",
+      "price": "Unknown. A search-result snippet suggests ₹297 for a three-day trial, but the underlying Facebook page was not retrieved, so the price is unverified. https://www.facebook.com/EarthOrganicjuices/posts/fresh-cold-pressed-juice-at-your-door-before-7-amtry-our-3-day-trial-for-297-del/1406172155030581/",
+      "channel": "Instagram and WhatsApp are described in supplied search results; the Instagram page was unreadable beyond its title. https://www.instagram.com/earthorganicjuice/ ; https://www.facebook.com/EarthOrganicjuices/posts/fresh-cold-pressed-juice-at-your-door-before-7-amtry-our-3-day-trial-for-297-del/1406172155030581/",
+      "strength": "Supplied search results describe Pune and PCMC delivery, cold-pressed juices, weekly subscriptions and early-morning delivery. Four testimonials on the company website praise freshness or natural flavor; one reports using amla juice close to a year. Independent verification is unknown. https://www.instagram.com/earthorganicjuice/ ; https://www.facebook.com/EarthOrganicjuices/posts/fresh-cold-pressed-juice-at-your-door-before-7-amtry-our-3-day-trial-for-297-del/1406172155030581/ ; https://earthorganicjuices.com/",
+      "weakness": "Verified price and specific Pune neighborhoods are unknown; the suggested trial price is unverified. The Instagram page was unreadable beyond its title and the Facebook post could not be read. No complaints were retrieved, and testimonial authenticity is not independently verified. https://www.instagram.com/earthorganicjuice/ ; https://www.facebook.com/EarthOrganicjuices/posts/fresh-cold-pressed-juice-at-your-door-before-7-amtry-our-3-day-trial-for-297-del/1406172155030581/ ; https://earthorganicjuices.com/"
+    }
+  ],
+  "market_gap": "A research-visible opportunity—not a claim that no competitor offers this—is a cold-pressed juice subscription that clearly states its per-juice price and pack size and explains how customers choose or receive variety across the week. The supplied evidence does not establish a verified unit price for either competitor; iBites describes its surfaced daily plan as the same juice each morning, while Earth’s weekly-plan variety terms are unknown. https://ibites.in/pune/online-juice-delivery ; https://ibites.in/pune/cold-pressed-juice ; https://www.instagram.com/earthorganicjuice/",
+  "evidence_refs": [
+    "https://ibites.in/pune/online-juice-delivery",
+    "https://ibites.in/pune/cold-pressed-juice",
+    "https://ibites.in/",
+    "https://www.instagram.com/earthorganicjuice/",
+    "https://earthorganicjuices.com/"
+  ],
+  "recommended_offer": "Recommendation: a seven-day Pune cold-pressed juice subscription with one juice per day, a clearly disclosed per-juice price and pack size, and explicit customer choice or rotation terms. Confirm serviceable delivery areas and operational details before advertising them.",
+  "positioning_line": "Recommendation: “A Pune cold-pressed juice subscription with clear per-juice pricing and a week of choice or planned variety.”",
+  "recommended_price": "₹699 for a seven-day plan of one juice per day (about ₹100 per juice); proposed price only, with serving size and delivery terms to be specified before sale.",
+  "rationale": "The recommendation addresses a visible information gap in the supplied research: neither competitor has a verified unit price and pack size in the available evidence, and iBites’ surfaced daily subscription description specifies the same juice each morning. Earth’s weekly-plan variety terms are unknown, so the proposed choice or rotation is a differentiation hypothesis, not a claim of exclusivity. ₹699 is a proposed test price, not a researched market price; no competitor price was verified. Evidence is thin: only two competitors had sufficient public evidence within research limits, specific Earth neighborhoods are unconfirmed, no verifiable complaints were retrieved, and customer testimonials are from company-controlled sources with independent verification unknown. Gym-goer focus is not evidenced for either competitor.",
+  "price_label": "recommendation"
+}

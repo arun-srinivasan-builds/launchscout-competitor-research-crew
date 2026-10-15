@@ -1,0 +1,55 @@
+{
+  "findings": [
+    {
+      "competitor": "Earth Organic Juices",
+      "kind": "praise",
+      "text": "“The flavor was incredibly fresh and natural, with the perfect balance of sweetness and tartness.” This is a customer testimonial published on the brand’s website.",
+      "basis": "quoted",
+      "source_url": "https://earthorganicjuices.com/"
+    },
+    {
+      "competitor": "Earth Organic Juices",
+      "kind": "praise",
+      "text": "JustDial shows a 4.8 rating from 229 ratings and reports that users liked the juice’s original, pure taste and prompt, reliable early-morning delivery.",
+      "basis": "reported",
+      "source_url": "https://www.justdial.com/Pune/Earth-Organic-Juices-Near-Nakhate-Petrol-Pump-Kalewadi/020PXX20-XX20-210904130536-Q7E2_BZDET/reviews"
+    },
+    {
+      "competitor": "Earth Organic Juices",
+      "kind": "praise",
+      "text": "A reviewer says a weekly subscription was delivered early each morning and describes the juice as hygienically packaged in a glass bottle.",
+      "basis": "reported",
+      "source_url": "https://www.justdial.com/Pune/Earth-Organic-Juices-Near-Nakhate-Petrol-Pump-Kalewadi/020PXX20-XX20-210904130536-Q7E2_BZDET/reviews"
+    },
+    {
+      "competitor": "iBites",
+      "kind": "praise",
+      "text": "“You can actually tell it’s freshly made” and the reviewer says it “genuinely tasted better than most.” The page presents this as a customer review.",
+      "basis": "quoted",
+      "source_url": "https://ibites.in/reviews"
+    },
+    {
+      "competitor": "iBites",
+      "kind": "praise",
+      "text": "A customer reports punctual daily delivery and says the juices feel freshly prepared.",
+      "basis": "reported",
+      "source_url": "https://ibites.in/reviews"
+    },
+    {
+      "competitor": "iBites",
+      "kind": "praise",
+      "text": "The reviews page reports 21 verified reviews and a 4.8 out of 5 average rating; the retrieved reviews shown are predominantly positive.",
+      "basis": "reported",
+      "source_url": "https://ibites.in/reviews"
+    }
+  ],
+  "per_competitor_summary": [
+    "Earth Organic Juices: Retrieved customer-facing praise emphasizes fresh, natural taste, perceived quality, and early-morning subscription delivery. JustDial’s retrieved summary says no specific dislikes were mentioned; no explicit customer complaint was retrieved. Sources: https://earthorganicjuices.com/ and https://www.justdial.com/Pune/Earth-Organic-Juices-Near-Nakhate-Petrol-Pump-Kalewadi/020PXX20-XX20-210904130536-Q7E2_BZDET/reviews",
+    "iBites: Retrieved testimonials praise freshness, taste, and punctual delivery, and the reviews page reports a 4.8/5 average from 21 verified reviews. No explicit customer complaint was retrieved. Source: https://ibites.in/reviews"
+  ],
+  "gaps": [
+    "No verifiable customer complaints were retrieved for either competitor; this does not establish that no complaints exist.",
+    "iBites feedback was retrieved from its own reviews page; no independent third-party ratings or review source was verified in the retrieved material.",
+    "Earth Organic Juices’ Tripadvisor page could not be read, and the Facebook post page returned an error; neither provided retrievable customer feedback."
+  ]
+}

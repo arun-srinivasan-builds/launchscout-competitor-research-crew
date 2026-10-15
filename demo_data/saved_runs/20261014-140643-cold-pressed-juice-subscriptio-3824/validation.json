@@ -1,0 +1,145 @@
+{
+  "state": "partial_failed_acceptance",
+  "acceptance": {
+    "result": "fail",
+    "reasons": [
+      "only 2 competitor(s) have a name, URL and evidence URL (3 required)",
+      "only 0 competitor(s) have a verified price with evidence (3 required)",
+      "R2 At least 3 competitor rows: 2 competitor row(s) in the Key Competitors table (3 required).",
+      "R3 Every URL in the report was returned by a tool: 1 URL(s) were never returned by any tool."
+    ]
+  },
+  "rules": [
+    {
+      "id": "R1",
+      "title": "Six sections in order",
+      "status": "pass",
+      "detail": "Six sections present, in order.",
+      "items": []
+    },
+    {
+      "id": "R2",
+      "title": "At least 3 competitor rows",
+      "status": "fail",
+      "detail": "2 competitor row(s) in the Key Competitors table (3 required).",
+      "items": []
+    },
+    {
+      "id": "R3",
+      "title": "Every URL in the report was returned by a tool",
+      "status": "fail",
+      "detail": "1 URL(s) were never returned by any tool.",
+      "items": [
+        "https://www.reddit.com/r/PCMC/comments/1o2ow45/just-launched-earth-organic-juices-in-pune/"
+      ]
+    },
+    {
+      "id": "R4",
+      "title": "Report prices match verified evidence",
+      "status": "pass",
+      "detail": "Every price in the competitor table matches a verified price or is unknown.",
+      "items": []
+    },
+    {
+      "id": "R5",
+      "title": "30-day plan covers Weeks 1-4",
+      "status": "pass",
+      "detail": "Weeks 1-4 present.",
+      "items": []
+    },
+    {
+      "id": "R6",
+      "title": "Proposed price labelled Recommendation",
+      "status": "pass",
+      "detail": "Recommendation label present.",
+      "items": []
+    },
+    {
+      "id": "R7",
+      "title": "Sources cover every competitor and verified price",
+      "status": "pass",
+      "detail": "All competitor and price evidence URLs are listed.",
+      "items": []
+    },
+    {
+      "id": "R8",
+      "title": "Links reachable",
+      "status": "pass",
+      "detail": "No broken links.",
+      "items": []
+    }
+  ],
+  "section_keys": [
+    "key_competitors",
+    "complaints",
+    "market_gap",
+    "positioning",
+    "launch_plan",
+    "sources"
+  ],
+  "competitor_rows": 2,
+  "verified_prices": 0,
+  "eligible_competitors": 2,
+  "links": [
+    {
+      "url": "https://www.instagram.com/earthorganicjuice/",
+      "status": "ok",
+      "code": null,
+      "detail": "page was read during research",
+      "source": "research"
+    },
+    {
+      "url": "https://www.reddit.com/r/PCMC/comments/1o2ow45/just_launched_earth_organic_juices_in_pune/",
+      "status": "ok",
+      "code": 200,
+      "detail": "HTTP 200",
+      "source": "checked"
+    },
+    {
+      "url": "https://www.facebook.com/Earthorganicjuices/posts/fresh-cold-pressed-juice-at-your-door-before-7-amtry-our-3-day-trial-for-297-del/1406172155030581/",
+      "status": "ok",
+      "code": null,
+      "detail": "page was read during research",
+      "source": "research"
+    },
+    {
+      "url": "https://ibites.in/pune/online-juice-delivery",
+      "status": "ok",
+      "code": null,
+      "detail": "page was read during research",
+      "source": "research"
+    },
+    {
+      "url": "https://ibites.in/reviews",
+      "status": "ok",
+      "code": null,
+      "detail": "page was read during research",
+      "source": "research"
+    },
+    {
+      "url": "https://earthorganicjuices.com/",
+      "status": "ok",
+      "code": null,
+      "detail": "page was read during research",
+      "source": "research"
+    },
+    {
+      "url": "https://www.justdial.com/Pune/Earth-Organic-Juices-Near-Nakhate-Petrol-Pump-Kalewadi/020PXX20-XX20-210904130536-Q7E2_BZDET/reviews",
+      "status": "ok",
+      "code": null,
+      "detail": "page was read during research",
+      "source": "research"
+    },
+    {
+      "url": "https://www.reddit.com/r/PCMC/comments/1o2ow45/just-launched-earth-organic-juices-in-pune/",
+      "status": "ok",
+      "code": 200,
+      "detail": "HTTP 200",
+      "source": "checked"
+    }
+  ],
+  "counts": {
+    "quoted": 2,
+    "reported": 4
+  }
+}

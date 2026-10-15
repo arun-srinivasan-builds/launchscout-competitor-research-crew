@@ -12,6 +12,7 @@ from pathlib import Path
 import streamlit as st
 
 from launchscout import deck as deck_mod
+from launchscout.demo import DemoModeError, is_demo
 from launchscout.runner import RunManager, get_manager
 from launchscout.saved_runs import LABEL_TEXT, SavedRunSummary, list_saved_runs
 from ui.theme import pill, section
@@ -99,6 +100,8 @@ def _generate(manager: RunManager, run_id: str) -> None:
         with st.spinner("Pitch Deck agent is writing six slides…"):
             result = deck_mod.generate_deck(source, settings)
             deck_mod.save_deck(manager.runs_dir(), source, result, settings.model_name)
+    except DemoModeError as exc:
+        st.warning(str(exc))
     except deck_mod.DeckRefused as exc:
         st.error(str(exc))
     except ValueError as exc:
@@ -140,6 +143,9 @@ def render() -> None:
         + " Generating makes one model call (no searches, no page reads).</div></div>",
         unsafe_allow_html=True,
     )
-    if st.button("Generate pitch deck", key="deck_generate"):
+    demo = is_demo()
+    if demo:
+        st.caption("Public demo: deck generation is disabled. Download the existing deck below.")
+    if st.button("Generate pitch deck", key="deck_generate", disabled=demo):
         _generate(manager, run_id)
     _render_stored(manager, run_id)
