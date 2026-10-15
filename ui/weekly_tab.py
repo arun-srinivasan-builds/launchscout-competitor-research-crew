@@ -72,9 +72,7 @@ def _render_comparison(result: Comparison) -> None:
         for reason in result.reasons:
             st.warning(reason)
         return
-    _html(view.run_cards_html(result))
-    _title("Change verification")
-    _html(view.verification_html(result))
+    _html(view.dashboard_html(result))
     _title("Competitor changes")
     if result.rows:
         _html(view.table_html(result))

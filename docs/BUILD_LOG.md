@@ -484,3 +484,7 @@ None.
 ### V3 Weekly Tracking visual review corrections (15 Oct 2026, local commit; not pushed)
 - Removed the duplicate LS logo from the tracking hero (the app header keeps it); eyebrow now "Market intelligence"; baseline/latest cards joined by a VS badge; Eligibility reduced from a full card to a compact strip with the same pill and the reasons unchanged. No logic, evidence or Demo Mode change.
 - Ruff clean; full suite passes.
+
+### V3 Weekly Tracking final visual polish (15 Oct 2026, local commit; not pushed)
+- Presentation only. KPI cards: per-tone gradients, icon tiles, larger values and higher-contrast notes. From 1281 px the run comparison (left) and the change verification overview (right) share one row; below that they stack as before. Run cards are narrower with a compact VS badge and a single "Same scope" line. Horizontal verification bars, evidence panels, table, Markdown download and tabs unchanged. No tracking logic, guard, saved-result or deployment change.
+- Ruff clean; full suite passes (355 tests). Browser check at 1480, 1280, 820 and 390 px: no horizontal overflow.

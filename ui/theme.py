@@ -714,16 +714,30 @@ TRACKING_CSS = """
   margin: 0 0 1.1rem 0; }
 @media (max-width: 1100px) { .tk-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .tk-kpis { grid-template-columns: minmax(0, 1fr); } }
-.tk-kpi { box-sizing: border-box; padding: .85rem 1rem; border-radius: 12px;
-  border: 1px solid var(--ls-border); background: var(--ls-surface); border-top-width: 3px; }
-.tk-kpi-teal { border-top-color: var(--ls-teal); }
-.tk-kpi-gold { border-top-color: var(--tk-gold); }
-.tk-kpi-blue { border-top-color: var(--ls-blue); }
-.tk-kpi-navy { border-top-color: var(--ls-steel); }
-.tk-kpi-label { font-size: .85rem; font-weight: 600; color: var(--ls-muted); }
-.tk-kpi-val { font-size: 2rem; font-weight: 800; color: var(--ls-text); line-height: 1.15;
-  margin-top: .1rem; }
-.tk-kpi-note { font-size: .82rem; color: var(--ls-muted); margin-top: .2rem; line-height: 1.35; }
+.tk-kpi { display: flex; align-items: center; gap: .85rem; box-sizing: border-box;
+  padding: .8rem 1rem; border-radius: 14px; border: 1px solid var(--ls-border);
+  border-top-width: 3px; min-width: 0; box-shadow: 0 6px 18px rgba(2, 8, 23, 0.35); }
+.tk-kpi-teal { border-top-color: var(--ls-teal);
+  background: linear-gradient(135deg, rgba(45, 212, 191, 0.20), rgba(12, 24, 48, 0.96) 70%); }
+.tk-kpi-gold { border-top-color: var(--tk-gold);
+  background: linear-gradient(135deg, rgba(217, 180, 91, 0.20), rgba(12, 24, 48, 0.96) 70%); }
+.tk-kpi-blue { border-top-color: var(--ls-blue);
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.22), rgba(12, 24, 48, 0.96) 70%); }
+.tk-kpi-navy { border-top-color: var(--ls-steel);
+  background: linear-gradient(135deg, rgba(99, 140, 190, 0.26), rgba(12, 24, 48, 0.96) 70%); }
+.tk-kpi-icon { flex: none; display: grid; place-items: center; width: 2.9rem; height: 2.9rem;
+  border-radius: 12px; border: 1px solid rgba(232, 238, 248, 0.18);
+  background: rgba(5, 12, 28, 0.55); }
+.tk-kpi-icon svg { width: 1.6rem; height: 1.6rem; }
+.tk-kpi-teal .tk-kpi-icon { color: var(--ls-teal); }
+.tk-kpi-gold .tk-kpi-icon { color: var(--tk-gold); }
+.tk-kpi-blue .tk-kpi-icon { color: var(--ls-blue); }
+.tk-kpi-navy .tk-kpi-icon { color: #A9C4E4; }
+.tk-kpi-body { min-width: 0; }
+.tk-kpi-label { font-size: .88rem; font-weight: 700; color: #CFE0F5; letter-spacing: .01em; }
+.tk-kpi-val { font-size: 2.1rem; font-weight: 800; color: #FFFFFF; line-height: 1.1;
+  margin-top: .05rem; }
+.tk-kpi-note { font-size: .8rem; color: #B4C6DD; margin-top: .15rem; line-height: 1.35; }
 .tk-runs { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: .8rem;
   align-items: stretch; margin: .5rem 0 1.1rem 0; }
 @media (max-width: 820px) { .tk-runs { grid-template-columns: minmax(0, 1fr); } }
@@ -737,6 +751,8 @@ TRACKING_CSS = """
   margin: 0; font-size: .9rem; }
 .tk-run dt { color: var(--ls-muted); }
 .tk-run dd { margin: 0; color: var(--ls-text); overflow-wrap: anywhere; }
+.tk-scope { margin: -.35rem 0 .9rem 0; font-size: .85rem; color: var(--ls-muted);
+  overflow-wrap: anywhere; }
 .tk-run-mid { display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: .4rem; padding: 0 .4rem; text-align: center; font-size: .82rem; color: var(--ls-muted); }
 .tk-vs { display: grid; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: 50%;
@@ -749,6 +765,15 @@ TRACKING_CSS = """
   color: var(--ls-muted); }
 .tk-elig .ls-pill { margin: 0; }
 .tk-elig-note { font-size: .88rem; color: var(--ls-muted); }
+.tk-dash { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 1.1rem;
+  margin: 0 0 .6rem 0; }
+@media (min-width: 1281px) {
+  .tk-dash { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-items: start; }
+}
+.tk-col { min-width: 0; }
+.tk-col .tk-section-title { margin-top: .9rem; }
+.tk-dash .tk-runs { margin-bottom: .6rem; }
+.tk-dash .tk-split { grid-template-columns: minmax(0, 1fr); gap: .7rem; margin-bottom: .6rem; }
 .tk-split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem;
   margin: 0 0 1.1rem 0; }
 @media (max-width: 900px) { .tk-split { grid-template-columns: minmax(0, 1fr); } }
@@ -830,7 +855,8 @@ TRACKING_CSS = """
 @media (max-width: 640px) {
   .tk-hero { padding: .9rem 1rem; }
   .tk-hero h2 { font-size: 1.4rem; }
-  .tk-kpi-val { font-size: 1.7rem; }
+  .tk-kpi-val { font-size: 1.8rem; }
+  .tk-kpi-icon { width: 2.5rem; height: 2.5rem; }
 }
 </style>
 """

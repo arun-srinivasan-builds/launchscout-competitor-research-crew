@@ -91,12 +91,33 @@ def header_html() -> str:
 
 
 # ------------------------------------------------------------------ KPI cards
+def _svg(paths: str) -> str:
+    return (
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
+        'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + "</svg>"
+    )
+
+
+KPI_ICON = {
+    "verified": _svg(
+        '<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>'
+    ),
+    "review": _svg('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/>'
+                   '<circle cx="12" cy="12" r="2.8"/>'),
+    "runs": _svg('<path d="M12 3l9 4.5-9 4.5-9-4.5z"/><path d="M3 12l9 4.5 9-4.5"/>'
+                 '<path d="M3 16.5L12 21l9-4.5"/>'),
+    "monitoring": _svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+}
+
+
 def _kpi(key: str, label: str, value: str, note: str, tone: str) -> str:
     return (
         f'<div class="tk-kpi tk-kpi-{tone}" data-kpi="{_e(key)}">'
+        f'<span class="tk-kpi-icon">{KPI_ICON[key]}</span>'
+        '<div class="tk-kpi-body">'
         f'<div class="tk-kpi-label">{_e(label)}</div>'
         f'<div class="tk-kpi-val" data-value="{_e(value)}">{_e(value)}</div>'
-        f'<div class="tk-kpi-note">{_e(note)}</div></div>'
+        f'<div class="tk-kpi-note">{_e(note)}</div></div></div>'
     )
 
 
@@ -155,10 +176,9 @@ def run_cards_html(result: Comparison) -> str:
     return (
         '<div class="tk-runs">'
         + _run_card("Baseline run", result.baseline)
-        + f'<div class="tk-run-mid"><span class="tk-vs" aria-hidden="true">VS</span>'
-        f'<span class="tk-run-scope">Same scope<br>{scope}</span></div>'
+        + '<div class="tk-run-mid"><span class="tk-vs" aria-hidden="true">VS</span></div>'
         + _run_card("Latest run", result.latest)
-        + "</div>"
+        + f'</div><div class="tk-scope">Same scope: {scope}</div>'
     )
 
 
@@ -287,3 +307,21 @@ def detail_html(row: CompetitorChange) -> str:
 
 def limitations_html(items: list[str]) -> str:
     return '<ul class="tk-limits">' + "".join(f"<li>{_e(t)}</li>" for t in items) + "</ul>"
+
+
+def dashboard_html(result: Comparison) -> str:
+    """Run comparison (left) and change verification overview (right) on wide screens.
+
+    The two sections stack in this order on narrower screens (CSS only).
+    """
+    if not result.eligible:
+        return ""
+    return (
+        '<div class="tk-dash">'
+        '<section class="tk-col"><div class="tk-section-title">Run comparison</div>'
+        + run_cards_html(result)
+        + '</section><section class="tk-col"><div class="tk-section-title">'
+        "Change verification overview</div>"
+        + verification_html(result)
+        + "</section></div>"
+    )

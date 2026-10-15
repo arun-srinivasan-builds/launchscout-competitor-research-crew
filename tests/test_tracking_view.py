@@ -166,3 +166,19 @@ def test_dashboard_markup_has_no_inline_styles():
     assert "style=" not in blob
     source = (ROOT / "ui" / "tracking_view.py").read_text(encoding="utf-8")
     assert "style=" not in source
+
+
+def test_dashboard_places_run_comparison_before_verification_overview():
+    result = comparison([row("A", REVIEW, latest_sources=["https://a/1"])])
+    html = view.dashboard_html(result)
+    assert html.count("<section") == 2
+    assert html.index("Run comparison") < html.index("Baseline run") < html.index(
+        "Change verification overview"
+    ) < html.index("Status distribution") < html.index("Evidence coverage")
+    assert view.dashboard_html(comparison([], eligible=False)) == ""
+
+
+def test_every_kpi_card_has_an_icon_and_keeps_its_data_attributes():
+    html = view.kpi_html(comparison([row("A", CHANGED)]), {"validated": 1})
+    assert html.count('class="tk-kpi-icon"') == 4 and html.count("<svg") == 4
+    assert html.count("data-kpi=") == 4 and html.count("data-value=") == 4
