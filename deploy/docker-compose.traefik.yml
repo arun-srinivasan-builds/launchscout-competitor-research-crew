@@ -7,6 +7,10 @@
 #   TRAEFIK_CERT_RESOLVER  name of Traefik's ACME certificate resolver
 #   LAUNCHSCOUT_HOST       launchscout.arunsrinivasan.io
 # Compose refuses to start if any is missing (no defaults on purpose).
+# Fixed project name: do not let Compose derive it from the directory ("deploy"), which could
+# collide with another stack on a shared VPS.
+name: launchscout-demo
+
 services:
   launchscout:
     image: launchscout-demo:${LAUNCHSCOUT_TAG:-latest}

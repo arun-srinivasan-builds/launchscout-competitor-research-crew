@@ -65,6 +65,12 @@ LAUNCHSCOUT_HOST=launchscout.arunsrinivasan.io
 LAUNCHSCOUT_TAG=<tag or short commit>
 ```
 
+The compose file pins the project name `launchscout-demo` (`name:` at the top), so Compose never
+uses the directory name `deploy` and cannot clash with another stack. Container, image and
+router names are also `launchscout-*`. Confirm no existing project uses it:
+`docker compose ls -a` must not list `launchscout-demo`, and `docker ps -a --filter name=launchscout-demo -q`
+must print nothing, before the first deploy.
+
 Render and review before starting. Compose refuses to render if a variable is missing:
 
 ```bash
@@ -72,7 +78,7 @@ docker compose --env-file deploy/.env.traefik -f deploy/docker-compose.traefik.y
 ```
 
 Confirm in the output: no `ports:` section, one external network equal to `TRAEFIK_NETWORK`,
-`LAUNCHSCOUT_MODE: demo`, and the router rule `Host(launchscout.arunsrinivasan.io)`.
+`name: launchscout-demo`, `LAUNCHSCOUT_MODE: demo`, and the router rule `Host(launchscout.arunsrinivasan.io)`.
 
 ## 4. Deploy
 
