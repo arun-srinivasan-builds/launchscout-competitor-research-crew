@@ -152,6 +152,16 @@ def test_demo_notices_are_shown_in_the_header_banner_workspace_and_deck_tab(demo
     assert at.button(key="deck_generate").disabled is True
 
 
+def test_demo_deck_source_card_does_not_mention_a_model_call(demo_env):
+    at = _app()
+    text = " ".join(m.value for m in at.tabs[1].markdown)
+    assert (
+        "This demo uses a previously generated pitch deck. No new AI calls or research "
+        "searches are performed." in text
+    )
+    assert "Generating makes one model call" not in text
+
+
 def test_live_mode_shows_no_demo_notices(monkeypatch, tmp_path):
     monkeypatch.setenv(demo.MODE_ENV, "live")
     monkeypatch.setenv(demo.RUNS_DIR_ENV, str(DEMO_RUNS))
@@ -164,6 +174,9 @@ def test_live_mode_shows_no_demo_notices(monkeypatch, tmp_path):
     assert not at.exception
     assert "DEMO MODE" not in page and "Public Demo" not in page and "Public demo" not in page
     assert at.button(key="run_research").disabled is False
+    deck_text = " ".join(m.value for m in at.tabs[1].markdown)
+    assert "Generating makes one model call (no searches, no page reads)." in deck_text
+    assert "previously generated pitch deck" not in deck_text
 
 
 def test_demo_blocks_submit_even_if_the_form_is_driven_directly(demo_env, monkeypatch):

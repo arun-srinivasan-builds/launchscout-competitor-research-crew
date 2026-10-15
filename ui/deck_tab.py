@@ -17,6 +17,11 @@ from launchscout.runner import RunManager, get_manager
 from launchscout.saved_runs import LABEL_TEXT, SavedRunSummary, list_saved_runs
 from ui.theme import DEMO_DECK_NOTE, demo_note, pill, section
 
+LIVE_SOURCE_NOTE = "Generating makes one model call (no searches, no page reads)."
+DEMO_SOURCE_NOTE = (
+    "This demo uses a previously generated pitch deck. No new AI calls or research "
+    "searches are performed."
+)
 PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 
 
@@ -128,6 +133,7 @@ def render() -> None:
         key="deck_source_run",
     )
     summary = by_id[run_id]
+    demo = is_demo()
     partial = summary.label != "validated"
     chips = [pill(LABEL_TEXT[summary.label], "warn" if partial else "ok")]
     st.markdown(
@@ -140,10 +146,11 @@ def render() -> None:
             if partial
             else "Validated report: all acceptance checks passed."
         )
-        + " Generating makes one model call (no searches, no page reads).</div></div>",
+        + " "
+        + (DEMO_SOURCE_NOTE if demo else LIVE_SOURCE_NOTE)
+        + "</div></div>",
         unsafe_allow_html=True,
     )
-    demo = is_demo()
     if demo:
         demo_note(DEMO_DECK_NOTE)
     if st.button("Generate pitch deck", key="deck_generate", disabled=demo):
