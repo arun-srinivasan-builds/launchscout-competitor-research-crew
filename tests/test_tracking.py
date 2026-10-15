@@ -28,6 +28,7 @@ from launchscout.tracking import (
 )
 from launchscout.validation import ValidationReport
 from tests.conftest import make_manager
+from tests.helpers import tracking_values
 
 ROOT = Path(__file__).resolve().parent.parent
 APP = str(ROOT / "app.py")
@@ -363,10 +364,11 @@ def test_ui_shows_comparison_kpis_table_and_keeps_scheduler_truthful(tmp_path, m
     text = " ".join(m.value for m in tab.markdown)
     assert "Comparison available" in text
     assert "Confirmed configured: no" in text and "none recorded" in text
-    values = {m.label: m.value for m in tab.metric}
+    values = tracking_values(tab.markdown)
     assert values["Newly observed"] == "1" and values["Not observed in latest run"] == "1"
-    assert values["Changed"] == "1"
-    assert tab.button[0].disabled is True  # Rerun now stays disabled
+    assert values["Changed (verified)"] == "1" and values["Verified changes"] == "1"
+    assert values["Saved research runs"] == "2" and values["Monitoring status"] == "Manual"
+    assert tab.button(key="weekly_rerun").disabled is True  # Rerun now stays disabled
     assert not at.exception and hits == []
 
 
@@ -432,6 +434,7 @@ def test_ui_changed_kpi_excludes_text_differences(tmp_path, monkeypatch):
         runs, "run-b", [comp("Alpha", offer="Different wording")], started=T0 + timedelta(days=7)
     )
     at, hits = _tab(tmp_path, monkeypatch)
-    values = {m.label: m.value for m in at.tabs[2].metric}
-    assert values["Changed"] == "0" and values["Needs review"] == "1"
+    values = tracking_values(at.tabs[2].markdown)
+    assert values["Verified changes"] == "0" and values["Needs review"] == "1"
+    assert values["Changed (verified)"] == "0"
     assert hits == []

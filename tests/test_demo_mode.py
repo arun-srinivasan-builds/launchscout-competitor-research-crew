@@ -15,6 +15,7 @@ from launchscout.demo import DemoModeError
 from launchscout.runner import RunManager, set_manager
 from launchscout.saved_runs import list_saved_runs, load_saved_snapshot
 from launchscout.schemas import ResearchInput
+from tests.helpers import tracking_values
 
 ROOT = Path(__file__).resolve().parent.parent
 DEMO_RUNS = ROOT / "demo_data" / "saved_runs"
@@ -215,8 +216,8 @@ def test_demo_tracking_shows_the_l5_l6_comparison_with_no_verified_changes(demo_
     tab = at.tabs[2]
     text = " ".join(m.value for m in tab.markdown)
     assert "Comparison available" in text
-    values = {m.label: m.value for m in tab.metric}
-    assert values["Changed"] == "0" and values["Needs review"] == "2"
+    values = tracking_values(tab.markdown)
+    assert values["Verified changes"] == "0" and values["Needs review"] == "2"
     assert values["Newly observed"] == "0" and values["Not observed in latest run"] == "0"
 
 

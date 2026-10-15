@@ -44,7 +44,7 @@ def test_deck_tab_disabled_without_report():
 def test_weekly_rerun_disabled_and_scheduler_not_claimed():
     at = _app()
     weekly = at.tabs[2]
-    assert weekly.button[0].disabled is True
+    assert weekly.button(key="weekly_rerun").disabled is True
     text = " ".join(m.value for m in weekly.markdown)
     assert "Confirmed configured: no" in text
     assert "none recorded" in text

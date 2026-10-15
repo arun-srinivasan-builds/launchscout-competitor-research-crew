@@ -367,3 +367,27 @@ def wait_until(predicate: Any, timeout: float = 15.0, what: str = "condition") -
         if time.monotonic() > deadline:
             raise AssertionError(f"{what} not reached within {timeout:.0f}s")
         time.sleep(0.02)
+
+
+def tracking_values(elements) -> dict[str, str]:
+    """Counts shown on the Weekly Tracking dashboard, read from its rendered markup.
+
+    KPI cards give Verified changes / Needs review / Saved research runs / Monitoring status;
+    the verification panel gives per-status counts (e.g. "Newly observed").
+    """
+    import re
+
+    text = " ".join(m.value for m in elements)
+    values: dict[str, str] = {}
+    for key, label in (
+        ("verified", "Verified changes"),
+        ("review", "Needs review"),
+        ("runs", "Saved research runs"),
+        ("monitoring", "Monitoring status"),
+    ):
+        found = re.search(rf'data-kpi="{key}".*?data-value="([^"]*)"', text, re.S)
+        if found:
+            values[label] = found.group(1)
+    for found in re.finditer(r'<progress value="(\d+)" max="\d+" aria-label="([^"]+)">', text):
+        values.setdefault(found.group(2), found.group(1))
+    return values
