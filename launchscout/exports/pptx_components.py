@@ -17,33 +17,35 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
-# ---- palette (matches the app theme) ---------------------------------------------------------
-NAVY = RGBColor(0x05, 0x0C, 0x1C)
-SURFACE = RGBColor(0x0C, 0x18, 0x30)
-SURFACE_2 = RGBColor(0x11, 0x22, 0x44)
-BORDER = RGBColor(0x27, 0x40, 0x6B)
-TEXT = RGBColor(0xE8, 0xEE, 0xF8)
-MUTED = RGBColor(0x9F, 0xB2, 0xCC)
-TEAL = RGBColor(0x2D, 0xD4, 0xBF)
-TEAL_DARK = RGBColor(0x0F, 0x3B, 0x3B)
-AMBER = RGBColor(0xFB, 0xBF, 0x24)
-AMBER_DARK = RGBColor(0x2A, 0x22, 0x08)
-BLUE = RGBColor(0x38, 0xBD, 0xF8)
-PURPLE = RGBColor(0x8B, 0x5C, 0xF6)
-PURPLE_DARK = RGBColor(0x1E, 0x16, 0x3D)
-RED = RGBColor(0xF8, 0x71, 0x71)
-SOFT_WHITE = RGBColor(0xF7, 0xF9, 0xFB)
+# ---- palette: warm ivory paper, deep navy ink, burgundy brand accent ---------------------------
+CREAM = RGBColor(0xFA, 0xF6, 0xEC)  # slide background
+PAPER = RGBColor(0xFF, 0xFD, 0xF8)  # cards
+INK = RGBColor(0x14, 0x23, 0x3F)  # deep navy text
+MUTED = RGBColor(0x5B, 0x67, 0x7A)
+BORDER = RGBColor(0xE0, 0xD5, 0xBE)
+BURGUNDY = RGBColor(0x7B, 0x1E, 0x3A)
+BURGUNDY_LIGHT = RGBColor(0xF3, 0xE3, 0xE7)
+TEAL = RGBColor(0x1C, 0x7C, 0x7A)
+TEAL_LIGHT = RGBColor(0xDC, 0xEF, 0xEC)
+GOLD = RGBColor(0x9C, 0x72, 0x25)
+GOLD_LIGHT = RGBColor(0xF5, 0xEC, 0xD3)
+BLUE = RGBColor(0x34, 0x69, 0x9A)
+BLUE_LIGHT = RGBColor(0xDD, 0xE9, 0xF3)
+WHITE = RGBColor(0xFF, 0xFF, 0xFF)
+TEAL_ON_INK = RGBColor(0x7F, 0xD6, 0xCF)
 FONT = "Calibri"
+HEAD_FONT = "Georgia"
 
 # ---- geometry (inches) -----------------------------------------------------------------------
 SLIDE_W, SLIDE_H = 13.333, 7.5
-MARGIN_X = 0.5
+MARGIN_X = 0.45
 CONTENT_W = SLIDE_W - 2 * MARGIN_X
-FOOTER_TOP = 6.95
-CONTENT_BOTTOM = 6.8
+FOOTER_TOP = 7.04
+CONTENT_BOTTOM = 6.92
 GAP = 0.18
 
-GLYPH_EM = 0.5  # average Calibri glyph width (incl. capitals and bold) as a fraction of the size
+SERIF_EM_FACTOR = 1.12  # Georgia runs wider than Calibri at the same point size
+GLYPH_EM = 0.47  # average Calibri glyph width (incl. capitals and bold) as a fraction of the size
 LINE_SPACING = 1.2
 MIN_SIZE = 11
 
@@ -72,12 +74,13 @@ def estimate_lines(text: str, width_pt: float, size_pt: float) -> int:
 class Para:
     text: str
     size: float = 13
-    color: RGBColor = TEXT
+    color: RGBColor = INK
     bold: bool = False
     bullet: bool = False
     after: float = 4  # points of space after
     align: PP_ALIGN = PP_ALIGN.LEFT
     italic: bool = False
+    font: str = FONT
 
 
 @dataclass
@@ -93,7 +96,8 @@ def _needed_pt(paras: Sequence[Para], width_pt: float) -> float:
     total = 0.0
     for p in paras:
         indent = BULLET_INDENT_PT if p.bullet else 0.0
-        lines = estimate_lines(p.text, width_pt - indent, p.size)
+        eff = p.size * (SERIF_EM_FACTOR if p.font == HEAD_FONT else 1.0)
+        lines = estimate_lines(p.text, width_pt - indent, eff)
         total += lines * p.size * LINE_SPACING + p.after
     return total
 
@@ -124,7 +128,7 @@ def fit_paragraphs(paras: Sequence[Para], width_pt: float, height_pt: float) -> 
 
 
 def _apply_run(run, p: Para) -> None:
-    run.font.name = FONT
+    run.font.name = p.font
     run.font.size = Pt(p.size)
     run.font.bold = p.bold
     run.font.italic = p.italic
@@ -276,7 +280,7 @@ def badge(
     d: float,
     glyph: str,
     fill: RGBColor,
-    color: RGBColor = NAVY,
+    color: RGBColor = WHITE,
     *,
     size: float = 12,
     name: str | None = None,
@@ -336,14 +340,14 @@ def panel(
     h: float,
     heading: str | None = None,
     *,
-    accent: RGBColor = TEAL,
-    fill: RGBColor = SURFACE,
+    accent: RGBColor = BURGUNDY,
+    fill: RGBColor = PAPER,
     name: str | None = None,
     reserve: float = 0.0,
 ) -> float:
     """A bordered card with an accent strip and optional heading. Returns the inner top y."""
     box(slide, x, y, w, h, fill=fill, line=BORDER, name=name)
-    box(slide, x, y + 0.1, 0.07, h - 0.2, fill=accent, round_=False, name="Accent")
+    box(slide, x, y + 0.12, 0.06, h - 0.24, fill=accent, round_=False, name="Accent")
     inner = y + 0.1
     if heading:
         text(
@@ -351,62 +355,31 @@ def panel(
             x + 0.18,
             y + 0.08,
             w - 0.3 - reserve,
-            0.34,
-            Para(heading.upper(), 12, accent, bold=True, after=0),
+            0.32,
+            Para(heading.upper(), 11.5, accent, bold=True, after=0),
             pad=0.02,
             name="Panel heading",
         )
-        inner = y + 0.46
+        inner = y + 0.44
     return inner
 
 
-def kpi_tile(
+def bar(
     slide,
     x: float,
     y: float,
     w: float,
     h: float,
-    value: str,
-    label: str,
-    caption: str,
-    accent: RGBColor = TEAL,
+    fraction: float,
+    color: RGBColor,
+    *,
+    name: str,
 ) -> None:
-    """Large KPI: big value, bold label, muted caption."""
-    box(slide, x, y, w, h, fill=SURFACE, line=BORDER, name="KPI tile")
-    box(slide, x, y, w, 0.07, fill=accent, round_=False, name="Accent")
-    value_h = h * 0.34
-    text(
-        slide,
-        x + 0.15,
-        y + 0.15,
-        w - 0.3,
-        value_h,
-        Para(value, 40 if len(value) <= 6 else 28, accent, bold=True, after=0),
-        anchor=MSO_ANCHOR.MIDDLE,
-        pad=0.02,
-        name="KPI value",
-    )
-    text(
-        slide,
-        x + 0.15,
-        y + 0.15 + value_h,
-        w - 0.3,
-        0.38,
-        Para(label, 14, TEXT, bold=True, after=0),
-        pad=0.02,
-        name="KPI label",
-    )
-    rest = h - (0.15 + value_h + 0.38) - 0.1
-    text(
-        slide,
-        x + 0.15,
-        y + 0.15 + value_h + 0.38,
-        w - 0.3,
-        max(0.3, rest),
-        Para(caption, 12, MUTED, after=0),
-        pad=0.02,
-        name="KPI caption",
-    )
+    """A native progress bar: a pale track and a filled share (0..1)."""
+    box(slide, x, y, w, h, fill=BORDER, name=f"{name} track")
+    share = max(0.0, min(1.0, fraction))
+    if share > 0:
+        box(slide, x, y, max(w * share, 0.06), h, fill=color, name=f"{name} fill")
 
 
 def split_widths(total: float, n: int, gap: float = GAP) -> list[float]:

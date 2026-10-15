@@ -1,9 +1,10 @@
-"""Render a `DeckSpec` as an enterprise-style, fully editable six-slide PowerPoint.
+"""Render a `DeckSpec` as a premium, fully editable six-slide investor presentation (V3).
 
-Slides are composed from native shapes, text boxes, connectors and one native chart (no flattened
-images). The only picture is the approved LS logo. Layout is content-agnostic: numbers and text
+Slides are composed from native shapes, text boxes, connectors and progress bars (no flattened
+images); the only picture is the approved LS logo. Layout is content-agnostic: numbers and text
 come from the saved research (`DeckSource`) and the validated `DeckSpec`; nothing is hardcoded
-to one business idea, and missing evidence is shown as missing, never filled in.
+to one business idea, and missing evidence is shown as missing, never filled in. Verified
+findings, recommendations, assumptions and unknowns keep distinct labels.
 """
 
 from __future__ import annotations
@@ -14,45 +15,45 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pptx import Presentation
-from pptx.chart.data import CategoryChartData
-from pptx.enum.chart import XL_CHART_TYPE, XL_LABEL_POSITION, XL_LEGEND_POSITION
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
-from pptx.util import Emu, Inches, Pt
+from pptx.util import Emu, Inches
 
 from launchscout.exports.pptx_components import (
-    AMBER,
-    AMBER_DARK,
     BLUE,
+    BLUE_LIGHT,
     BORDER,
+    BURGUNDY,
+    BURGUNDY_LIGHT,
     CONTENT_BOTTOM,
     CONTENT_W,
+    CREAM,
     FOOTER_TOP,
     GAP,
+    GOLD,
+    GOLD_LIGHT,
+    HEAD_FONT,
+    INK,
     LINE_SPACING,
     MARGIN_X,
     MUTED,
-    NAVY,
-    PURPLE,
-    PURPLE_DARK,
+    PAPER,
+    SERIF_EM_FACTOR,
     SLIDE_H,
     SLIDE_W,
-    SOFT_WHITE,
-    SURFACE,
-    SURFACE_2,
     TEAL,
-    TEAL_DARK,
-    TEXT,
+    TEAL_LIGHT,
+    TEAL_ON_INK,
+    WHITE,
     Para,
     arrow,
     badge,
+    bar,
     box,
     chip,
     chip_width,
     estimate_lines,
-    kpi_tile,
     needed_height_in,
     panel,
-    split_widths,
 )
 from launchscout.exports.pptx_components import text as text_box
 from launchscout.schemas import Competitor, DeckSpec, SlideSpec
@@ -63,20 +64,19 @@ if TYPE_CHECKING:
 LOGO_FILE = Path(__file__).resolve().parent.parent.parent / "static" / "ls_logo_transparent.png"
 LOGO_ASPECT = 691 / 623
 GATE_MIN = 3  # mirrors validation.evaluate_gate (3 evidence-backed competitors, 3 verified prices)
-KICKERS = (
-    "EXECUTIVE DASHBOARD",
-    "COMPARISON MATRIX",
-    "EVIDENCE INTELLIGENCE",
-    "OPPORTUNITY MAP",
-    "PRICING STRATEGY",
-    "VISUAL ROADMAP",
+SLIDE_NAMES = (
+    "Problem & Opportunity",
+    "Market Landscape",
+    "Customer Insights",
+    "Solution & Differentiation",
+    "Go-to-Market Strategy",
+    "Financials & Roadmap",
 )
 _AMOUNT = re.compile(r"(₹|Rs\.?|INR|\$|USD|€|EUR)\s?(\d[\d,]*(?:\.\d+)?)", re.I)
 _WEEK = re.compile(r"^\s*week\s*(\d+)\s*[:\-–—]\s*(.+)$", re.I | re.S)
-_ACCESS = re.compile(
-    r"could not|cannot|not readable|unreadable|unavailable|blocked|login|not retriev", re.I
-)
+_URL = re.compile(r"https?://\S+")
 _FOOTER_NAMES = ("Footer", "Footer rule", "Slide number")
+_HEADER_BOTTOM = 1.08
 
 
 # ----------------------------------------------------------------------------- small helpers
@@ -101,10 +101,21 @@ def _sentences(value: str) -> list[str]:
 
 
 def _unlabel(value: str) -> str:
-    """Drop a leading 'Recommendation:' (the slide's tag already says it) and wrapping quotes."""
+    """Drop a leading 'Recommendation:' (the tag already says it) and wrapping quotes."""
     cleaned = re.sub(r"^\s*recommendation\s*:\s*", "", value or "", flags=re.I).strip()
     cleaned = cleaned.strip("\"'“”‘’ ")
     return cleaned[:1].upper() + cleaned[1:]
+
+
+def _plain(value: str) -> str:
+    """Text without bare URLs (they stay in the source list and the notes)."""
+    no_urls = _URL.sub("", value or "")
+    no_urls = re.sub(r"\s*;\s*;", ";", no_urls)
+    return " ".join(no_urls.replace(" ;", ";").split()).strip(" ;,")
+
+
+def _bullets(items: list[str], size: float = 12.5, color=INK) -> list[Para]:
+    return [Para(i, size, color, bullet=True, after=4) for i in items]
 
 
 class Ctx:
@@ -121,124 +132,140 @@ class Ctx:
     def status_label(self) -> str:
         return "PARTIAL EVIDENCE" if self.source.partial else "VALIDATED REPORT"
 
-    def findings(self, competitor: str, kind: str) -> list:
-        key = competitor.casefold().strip()
-        return [
-            f
-            for f in self.source.reviews.findings
-            if f.competitor.casefold().strip() == key and f.kind == kind
-        ]
 
+# ----------------------------------------------------------------------------- page chrome
+class Page:
+    """One slide: branded header, optional label banner, sources strip and footer."""
 
-# ----------------------------------------------------------------------------- chrome
-def _chrome(prs, ctx: Ctx, index: int, spec: SlideSpec):
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    fill = slide.background.fill
-    fill.solid()
-    fill.fore_color.rgb = NAVY
+    def __init__(self, prs, ctx: Ctx, index: int, spec: SlideSpec) -> None:
+        self.ctx, self.index, self.spec = ctx, index, spec
+        self.full: list[str] = []  # full text of anything shortened to fit (kept in the notes)
+        self.slide = prs.slides.add_slide(prs.slide_layouts[6])
+        fill = self.slide.background.fill
+        fill.solid()
+        fill.fore_color.rgb = CREAM
+        self._header()
+        self.top = self._banner()
+        self.bottom = self._sources()
 
-    box(slide, MARGIN_X, 0.3, 1.0, 0.8, fill=SOFT_WHITE, name="LS logo tile")
-    pic_h = 0.62
-    pic_w = pic_h * LOGO_ASPECT
-    pic = slide.shapes.add_picture(
-        str(LOGO_FILE), Inches(MARGIN_X + (1.0 - pic_w) / 2), Inches(0.39), height=Inches(pic_h)
-    )
-    pic.name = "LS logo"
-    pic._element.nvPicPr.cNvPr.set("descr", "LaunchScout LS logo")
+    @property
+    def height(self) -> float:
+        return self.bottom - self.top
 
-    text_box(
-        slide,
-        1.72,
-        0.26,
-        7.5,
-        0.27,
-        Para(f"{index:02d}  ·  {KICKERS[index - 1]}", 12, TEAL, bold=True, after=0),
-        pad=0.02,
-        name="Kicker",
-    )
-    text_box(
-        slide,
-        1.72,
-        0.54,
-        8.6,
-        0.62,
-        Para(spec.title, 30, TEXT, bold=True, after=0),
-        pad=0.02,
-        anchor=MSO_ANCHOR.MIDDLE,
-        name="Title",
-    )
-    status_fill = AMBER_DARK if ctx.source.partial else TEAL_DARK
-    status_color = AMBER if ctx.source.partial else TEAL
-    label = f"●  {ctx.status_label}"
-    width = chip_width(label, 12)
-    chip(
-        slide,
-        SLIDE_W - MARGIN_X - width,
-        0.52,
-        label,
-        status_fill,
-        status_color,
-        size=12,
-        h=0.36,
-        name="Evidence status",
-        line=status_color,
-    )
+    def text(self, x, y, w, h, paras, **kw):
+        items = [paras] if isinstance(paras, Para) else list(paras)
+        originals = [p.text for p in items]
+        shape, fit = text_box(self.slide, x, y, w, h, items, **kw)
+        if fit.truncated:
+            self.full.extend(o for o, p in zip(originals, fit.paras, strict=True) if o != p.text)
+        return shape, fit
 
-    top = 1.3
-    if spec.labels:
-        paras = [Para("   ·   ".join(spec.labels), 12, AMBER, bold=True, after=0)]
-        h = needed_height_in(paras, CONTENT_W, pad=0.12) + 0.04
-        text_box(
-            slide,
-            MARGIN_X,
-            top,
-            CONTENT_W,
-            h,
-            paras,
-            fill=AMBER_DARK,
-            pad=0.12,
-            anchor=MSO_ANCHOR.MIDDLE,
-            name="Labels",
+    def _header(self) -> None:
+        s, ctx = self.slide, self.ctx
+        box(s, MARGIN_X, 0.22, 3.3, 0.76, fill=INK, name="Brand block")
+        box(s, MARGIN_X + 0.1, 0.31, 0.58, 0.58, fill=WHITE, name="LS logo tile")
+        pic_h = 0.46
+        pic_w = pic_h * LOGO_ASPECT
+        pic = s.shapes.add_picture(
+            str(LOGO_FILE),
+            Inches(MARGIN_X + 0.1 + (0.58 - pic_w) / 2),
+            Inches(0.37),
+            height=Inches(pic_h),
         )
-        top += h + 0.14
+        pic.name = "LS logo"
+        pic._element.nvPicPr.cNvPr.set("descr", "LaunchScout LS logo")
+        text_box(
+            s, MARGIN_X + 0.82, 0.25, 2.4, 0.37,
+            Para("LaunchScout", 18, WHITE, bold=True, font=HEAD_FONT, after=0),
+            pad=0.02, name="Brand name",
+        )
+        text_box(
+            s, MARGIN_X + 0.82, 0.63, 2.4, 0.28,
+            Para("Competitor Research Crew", 11, TEAL_ON_INK, bold=True, after=0),
+            pad=0.02, name="Brand tagline",
+        )
+        label = ctx.status_label
+        width = chip_width(label, 11)
+        status_fill = GOLD_LIGHT if ctx.source.partial else TEAL_LIGHT
+        status_color = GOLD if ctx.source.partial else TEAL
+        chip(
+            s, SLIDE_W - MARGIN_X - width, 0.36, label, status_fill, status_color,
+            size=11, h=0.34, name="Evidence status", line=status_color,
+        )
+        title_x = MARGIN_X + 3.3 + 0.3
+        text_box(
+            s, title_x, 0.2, 0.8, 0.5,
+            Para(f"{self.index:02d}", 26, GOLD, bold=True, font=HEAD_FONT, after=0),
+            pad=0.02, anchor=MSO_ANCHOR.MIDDLE, name="Slide index",
+        )
+        title_w = SLIDE_W - MARGIN_X - width - 0.25 - (title_x + 0.8)
+        text_box(
+            s, title_x + 0.8, 0.2, title_w, 0.5,
+            Para(SLIDE_NAMES[self.index - 1], 26, BURGUNDY, bold=True, font=HEAD_FONT, after=0),
+            pad=0.02, anchor=MSO_ANCHOR.MIDDLE, name="Title",
+        )
+        sub = f"{self.spec.title}  ·  {ctx.source.input.idea}  ·  {ctx.source.input.city}"
+        text_box(
+            s, title_x + 0.8, 0.7, title_w, 0.28,
+            Para(_short(sub, 110), 12, MUTED, after=0), pad=0.02, name="Subtitle",
+        )
+        box(s, MARGIN_X, _HEADER_BOTTOM - 0.04, CONTENT_W, 0.025, fill=GOLD, round_=False,
+            name="Header rule")
 
-    arrow(
-        slide,
-        MARGIN_X,
-        FOOTER_TOP,
-        SLIDE_W - MARGIN_X,
-        FOOTER_TOP,
-        BORDER,
-        width_pt=1.0,
-        head=False,
-        name="Footer rule",
-    )
-    footer = (
-        f"LaunchScout  ·  {ctx.source.input.idea}  ·  {ctx.source.input.city}  ·  "
-        f"{'partial evidence' if ctx.source.partial else 'validated report'}  ·  "
-        f"run {ctx.source.run_id}  ·  generated {ctx.generated_on.isoformat()}"
-    )
-    text_box(
-        slide,
-        MARGIN_X,
-        FOOTER_TOP + 0.04,
-        CONTENT_W - 1.1,
-        0.4,
-        Para(footer, 10, MUTED, after=0),
-        pad=0.02,
-        name="Footer",
-    )
-    text_box(
-        slide,
-        SLIDE_W - MARGIN_X - 1.0,
-        FOOTER_TOP + 0.04,
-        1.0,
-        0.3,
-        Para(f"{index} / 6", 11, TEAL, bold=True, align=PP_ALIGN.RIGHT, after=0),
-        pad=0.02,
-        name="Slide number",
-    )
-    return slide, top
+    def _banner(self) -> float:
+        top = _HEADER_BOTTOM + 0.1
+        if self.spec.labels:
+            paras = [Para("   ·   ".join(self.spec.labels), 11.5, BURGUNDY, bold=True, after=0)]
+            h = needed_height_in(paras, CONTENT_W, pad=0.12) + 0.04
+            text_box(
+                self.slide, MARGIN_X, top, CONTENT_W, h, paras,
+                fill=BURGUNDY_LIGHT, line=BURGUNDY, pad=0.12, anchor=MSO_ANCHOR.MIDDLE,
+                name="Labels",
+            )
+            top += h + 0.12
+        return top
+
+    def _sources(self) -> float:
+        """Sources strip above the footer; returns the bottom of the free content area."""
+        refs = []
+        for ref in self.spec.source_refs:
+            label = _host(ref) if ref.startswith("http") else ref
+            if label and label not in refs:
+                refs.append(label)
+        shown = " · ".join(refs[:6]) + (f" · +{len(refs) - 6} more" if len(refs) > 6 else "")
+        line = f"Sources: {shown}" if refs else "Sources: none cited for this slide"
+        y = CONTENT_BOTTOM - 0.3
+        text_box(
+            self.slide, MARGIN_X, y, CONTENT_W, 0.3,
+            Para(_short(line, 190), 10.5, MUTED, after=0), pad=0.02,
+            anchor=MSO_ANCHOR.MIDDLE, name="Sources",
+        )
+        return y - 0.08
+
+    def finish(self, extra: list[str]) -> None:
+        s, ctx = self.slide, self.ctx
+        arrow(s, MARGIN_X, FOOTER_TOP, SLIDE_W - MARGIN_X, FOOTER_TOP, BORDER, width_pt=1.0,
+              head=False, name="Footer rule")
+        footer = (
+            f"LaunchScout  |  {SLIDE_NAMES[self.index - 1]}  |  "
+            f"{ctx.source.input.idea}, {ctx.source.input.city}  |  "
+            f"{'Partial evidence' if ctx.source.partial else 'Validated report'}  |  "
+            f"run {ctx.source.run_id}"
+        )
+        text_box(
+            s, MARGIN_X, FOOTER_TOP + 0.04, CONTENT_W - 1.2, 0.3,
+            Para(_short(footer, 170), 10, MUTED, after=0), pad=0.02, name="Footer",
+        )
+        text_box(
+            s, SLIDE_W - MARGIN_X - 1.1, FOOTER_TOP + 0.03, 1.1, 0.3,
+            Para(f"{self.index:02d} / 06", 11, BURGUNDY, bold=True, align=PP_ALIGN.RIGHT,
+                 after=0),
+            pad=0.02, name="Slide number",
+        )
+        _notes(s, self.spec, extra + (
+            ["Full text of items shortened on the slide:"] + [f"  {t}" for t in self.full]
+            if self.full else []
+        ))
 
 
 def _notes(slide, spec: SlideSpec, extra: list[str]) -> None:
@@ -256,584 +283,481 @@ def _notes(slide, spec: SlideSpec, extra: list[str]) -> None:
     slide.notes_slide.notes_text_frame.text = "\n\n".join(parts)
 
 
+def _kv(
+    page: Page, x: float, y: float, w: float, label: str, value: str, size: float = 13
+) -> float:
+    """A label/value pair; returns the y after it."""
+    paras = [
+        Para(label.upper(), 10.5, MUTED, bold=True, after=1),
+        Para(value, size, INK, bold=True, after=0),
+    ]
+    h = needed_height_in(paras, w, pad=0.02)
+    page.text(x, y, w, h, paras, pad=0.02, name=f"Fact: {label}")
+    return y + h + 0.08
+
+
+def _rule(page: Page, x: float, y: float, w: float) -> None:
+    box(page.slide, x, y, w, 0.015, fill=BORDER, round_=False, name="Divider")
+
+
 # ----------------------------------------------------------------------------- slide 1
-def _slide_dashboard(prs, ctx: Ctx, index: int, spec: SlideSpec) -> None:
-    slide, top = _chrome(prs, ctx, index, spec)
-    src = ctx.source
-    kpi_h = max(1.1, min(1.65, (CONTENT_BOTTOM - top - GAP) * 0.42))
-    n = len(ctx.comps)
-    tiles = [
-        (str(n), "Competitors researched", "named competitors with a URL and offer", TEAL),
-        (
-            str(ctx.n_evidence),
-            "Evidence-backed",
-            f"with at least one evidence page ({GATE_MIN} needed to pass)",
-            TEAL if ctx.n_evidence >= GATE_MIN else AMBER,
-        ),
-        (
-            str(ctx.n_verified),
-            "Verified prices",
-            f"amount, unit, source and date ({GATE_MIN} needed to pass)",
-            TEAL if ctx.n_verified >= GATE_MIN else AMBER,
-        ),
-        (
-            "PARTIAL" if src.partial else "PASSED",
-            "Research acceptance",
-            "report failed the acceptance gate; every slide is labelled"
-            if src.partial
-            else "all acceptance checks passed",
-            AMBER if src.partial else TEAL,
-        ),
-    ]
-    x = MARGIN_X
-    for (value, label, caption, accent), w in zip(tiles, split_widths(CONTENT_W, 4), strict=True):
-        kpi_tile(slide, x, top, w, kpi_h, value, label, caption, accent)
-        x += w + GAP
-    y = top + kpi_h + GAP
-    h = CONTENT_BOTTOM - y
-    w1, w2 = 4.7, 4.1
-    w3 = CONTENT_W - w1 - w2 - 2 * GAP
+def _slide_problem(page: Page) -> None:
+    ctx, spec, s = page.ctx, page.spec, page.slide
+    src, inp = ctx.source, ctx.source.input
+    top, height = page.top, page.height
+    wa, wb = 3.9, 4.4
+    wc = CONTENT_W - wa - wb - 2 * GAP
+    xa, xb, xc = MARGIN_X, MARGIN_X + wa + GAP, MARGIN_X + wa + wb + 2 * GAP
+    notes: list[str] = []
 
-    inner = panel(slide, MARGIN_X, y, w1, h, "Business opportunity", accent=TEAL)
-    rows = [
-        ("I", "Idea", src.input.idea),
-        ("M", "Market", src.input.city),
-        ("C", "Customer", src.input.target_customer),
-        ("H", "Opportunity (assumption)", _short(src.strategy.market_gap, 190) or "Not stated"),
-    ]
-    text_w = w1 - 0.85
-    needs = [
-        needed_height_in(
-            [Para(label.upper(), 11, MUTED, bold=True, after=1), Para(value, 14, TEXT, after=0)],
-            text_w,
-            pad=0.03,
-        )
-        + 0.04
-        for _, label, value in rows
-    ]
-    end = y + h - 0.1
-    spare = max(0.0, end - inner - sum(needs[:3]) - 1.0)  # keep >= 1in for the hypothesis
-    ry = inner
-    for i, (glyph, label, value) in enumerate(rows):
-        row_h = needs[i] + spare / 3 if i < 3 else end - ry
-        badge(slide, MARGIN_X + 0.2, ry + 0.06, 0.38, glyph, TEAL if i < 3 else PURPLE, size=13)
-        text_box(
-            slide,
-            MARGIN_X + 0.7,
-            ry,
-            w1 - 0.85,
-            row_h - 0.04,
-            [Para(label.upper(), 11, MUTED, bold=True, after=1), Para(value, 14, TEXT, after=0)],
-            pad=0.03,
-            name=f"Opportunity {label.split()[0]}",
-        )
-        ry += row_h
+    # A: the opportunity
+    y = panel(s, xa, top, wa, height, "The opportunity", accent=BURGUNDY)
+    paras = [Para(inp.idea, 22, INK, bold=True, font=HEAD_FONT, after=0)]
+    h = needed_height_in(paras, wa - 0.4)
+    page.text(xa + 0.2, y, wa - 0.4, h, paras, pad=0.02, name="Business idea")
+    y += h + 0.02
+    page.text(xa + 0.2, y, wa - 0.4, 0.34, Para(f"in {inp.city}", 15, TEAL, bold=True, after=0),
+              pad=0.02, name="City")
+    y += 0.46
+    _rule(page, xa + 0.2, y, wa - 0.4)
+    y = _kv(page, xa + 0.2, y + 0.1, wa - 0.4, "Target customer", inp.target_customer, 15) + 0.04
+    _rule(page, xa + 0.2, y, wa - 0.4)
+    page.text(xa + 0.2, y + 0.08, wa - 0.4, 0.28,
+              Para("RESEARCH SUMMARY", 10.5, MUTED, bold=True, after=0), pad=0.02,
+              name="Summary heading")
+    y += 0.4
+    page.text(xa + 0.2, y, wa - 0.4, top + height - y - 0.12, _bullets(spec.bullets, 14),
+              pad=0.02, name="Research summary")
 
-    x2 = MARGIN_X + w1 + GAP
-    inner2 = panel(slide, x2, y, w2, h, "Acceptance gate progress", accent=BLUE)
-    data = CategoryChartData()
-    data.categories = ["Evidence-backed competitors", "Verified prices"]
-    data.add_series("Achieved", (ctx.n_evidence, ctx.n_verified))
-    data.add_series("Required to pass", (GATE_MIN, GATE_MIN))
-    frame = slide.shapes.add_chart(
-        XL_CHART_TYPE.COLUMN_CLUSTERED,
-        Inches(x2 + 0.15),
-        Inches(inner2),
-        Inches(w2 - 0.3),
-        Inches(y + h - inner2 - 0.1),
-        data,
+    # B: customer -> market -> gap
+    y = panel(s, xb, top, wb, height, "From customer to opportunity", accent=BLUE)
+    area = top + height - y - 0.12
+    gap_h = 0.32
+    unit = (area - 2 * gap_h) / 3.0
+    weights = (0.6, 1.0, 1.4)
+    channels = sorted({ch for c in ctx.comps for ch in c.channels})
+    market = (
+        f"{len(ctx.comps)} competitor(s) researched; {ctx.n_evidence} with public evidence URLs; "
+        f"{ctx.n_verified} verified price(s)."
+        + (f" Channels seen: {', '.join(channels[:4])}." if channels else "")
     )
-    frame.name = "Gate progress chart"
-    chart = frame.chart
-    chart.font.size = Pt(11)
-    chart.font.name = "Calibri"
-    chart.font.color.rgb = TEXT
-    chart.has_legend = True
-    chart.legend.position = XL_LEGEND_POSITION.BOTTOM
-    chart.legend.include_in_layout = False
-    chart.legend.font.color.rgb = TEXT
-    chart.value_axis.maximum_scale = max(GATE_MIN, ctx.n_evidence, ctx.n_verified)
-    chart.value_axis.minimum_scale = 0
-    chart.value_axis.major_unit = 1
-    chart.value_axis.has_major_gridlines = False
-    chart.value_axis.tick_labels.font.color.rgb = MUTED
-    chart.category_axis.tick_labels.font.color.rgb = TEXT
-    plot = chart.plots[0]
-    for series, color in zip(plot.series, (AMBER if src.partial else TEAL, BORDER), strict=True):
-        series.format.fill.solid()
-        series.format.fill.fore_color.rgb = color
-    plot.has_data_labels = True
-    plot.data_labels.font.color.rgb = TEXT
-    plot.data_labels.font.bold = True
-    plot.data_labels.position = XL_LABEL_POSITION.OUTSIDE_END
-    plot.gap_width = 60
-
-    x3 = x2 + w2 + GAP
-    title = "Why it is partial" if src.partial else "Evidence summary"
-    inner3 = panel(slide, x3, y, w3, h, title, accent=AMBER if src.partial else TEAL)
-    reasons = src.acceptance_reasons or ["All acceptance checks passed."]
-    cleaned = [re.sub(r"^R\d\s+", "", r) for r in reasons]
-    paras = [Para(_short(r, 130), 12, TEXT, bullet=True, after=6) for r in cleaned[:4]]
-    text_box(
-        slide,
-        x3 + 0.18,
-        inner3,
-        w3 - 0.3,
-        y + h - inner3 - 0.1,
-        paras,
-        pad=0.03,
-        name="Acceptance reasons",
+    gap_text = _short(_plain(src.strategy.market_gap), 300) or (
+        "No market-gap statement was recorded in the research."
     )
-    _notes(slide, spec, [f"Acceptance reason: {r}" for r in reasons])
+    nodes = (
+        ("TARGET CUSTOMER", f"{inp.target_customer} in {inp.city}.", TEAL_LIGHT, TEAL),
+        ("OBSERVED IN THE MARKET", market, BLUE_LIGHT, BLUE),
+        ("RESEARCH-VISIBLE GAP (INFERENCE, NOT A MARKET SIZE)", gap_text, BURGUNDY_LIGHT,
+         BURGUNDY),
+    )
+    ny = y
+    for i, (label, body, fill, accent) in enumerate(nodes, 1):
+        node_h = unit * weights[i - 1]
+        box(s, xb + 0.2, ny, wb - 0.4, node_h, fill=fill, line=accent, name=f"Node {i}")
+        page.text(
+            xb + 0.3, ny + 0.05, wb - 0.6, node_h - 0.1,
+            [Para(label, 10.5, accent, bold=True, after=2), Para(body, 12.5, INK, after=0)],
+            pad=0.02, anchor=MSO_ANCHOR.MIDDLE, name=f"Node {i} text",
+        )
+        if i < len(nodes):
+            arrow(s, xb + wb / 2, ny + node_h, xb + wb / 2, ny + node_h + gap_h, accent,
+                  width_pt=2.5, name=f"Flow arrow {i}")
+        ny += node_h + gap_h
+    notes.append("Flow: target customer -> observed market -> research-visible gap")
+
+    # C: scope and evidence status
+    y = panel(s, xc, top, wc, height, "Research scope & evidence", accent=TEAL)
+    mode = getattr(inp.mode, "value", inp.mode)
+    half = (wc - 0.4 - 0.1) / 2
+    facts = (
+        ("Competitors", str(len(ctx.comps))),
+        ("Sources reviewed", str(len(src.evidence_urls)) if src.evidence_urls else "none"),
+        ("Report status", "Partial" if src.partial else "Validated"),
+        ("Research mode", str(mode).title()),
+    )
+    for row in (0, 2):
+        ny = y
+        for col in (0, 1):
+            label, value = facts[row + col]
+            ny = max(ny, _kv(page, xc + 0.2 + col * (half + 0.1), y, half, label, value, 13))
+        y = ny
+    for label, have in (("Competitors with evidence", ctx.n_evidence),
+                        ("Verified competitor prices", ctx.n_verified)):
+        page.text(xc + 0.2, y, wc - 0.4, 0.26,
+                  Para(f"{label}: {have} of {GATE_MIN} required", 11, INK, bold=True, after=0),
+                  pad=0.02, name=f"Gauge label: {label}")
+        bar(s, xc + 0.2, y + 0.3, wc - 0.4, 0.14, have / GATE_MIN,
+            TEAL if have >= GATE_MIN else GOLD, name=f"Gauge: {label}")
+        y += 0.56
+    if src.partial and src.acceptance_reasons:
+        page.text(xc + 0.2, y, wc - 0.4, 0.26,
+                  Para("WHY THE REPORT IS PARTIAL", 10.5, MUTED, bold=True, after=0), pad=0.02,
+                  name="Partial heading")
+        reasons = [_short(r, 150) for r in src.acceptance_reasons[:3]]
+        page.text(xc + 0.2, y + 0.28, wc - 0.4, top + height - y - 0.4,
+                  _bullets(reasons, 11.5, INK), pad=0.02, name="Acceptance gaps")
+    page.finish(notes)
 
 
 # ----------------------------------------------------------------------------- slide 2
-ROW_SPEC = (
-    ("O", "Offering", 0.95),
-    ("S", "Subscription", 0.65),
-    ("C", "Channels", 0.5),
-    ("$", "Pricing", 0.95),
-    ("E", "Evidence", 0.5),
-    ("!", "Limitations", 0.9),
-)
+def _slide_market(page: Page) -> None:
+    ctx, spec, s = page.ctx, page.spec, page.slide
+    top, height = page.top, page.height
+    lw = 8.3
+    rw = CONTENT_W - lw - GAP
+    xr = MARGIN_X + lw + GAP
+    cols = (1.5, 2.8, 1.65, 2.35)
+    heads = ("COMPETITOR", "OFFER & POSITIONING", "CHANNELS", "PRICE")
+    notes: list[str] = []
 
-
-def _subscription_text(comp: Competitor) -> str:
-    hits = [
-        s for s in _sentences(comp.offer) if re.search(r"subscri|plan|weekly|daily|trial", s, re.I)
-    ]
-    return " ".join(hits) if hits else "Not evidenced in the research"
-
-
-def _slide_matrix(prs, ctx: Ctx, index: int, spec: SlideSpec) -> None:
-    slide, top = _chrome(prs, ctx, index, spec)
-    comps = ctx.comps[:5]
+    box(s, MARGIN_X, top, lw, height, fill=PAPER, line=BORDER, name="Matrix card")
+    x = MARGIN_X
+    for head, w in zip(heads, cols, strict=True):
+        page.text(x + 0.12, top + 0.08, w - 0.12, 0.3,
+                  Para(head, 10.5, BURGUNDY, bold=True, after=0), pad=0.02,
+                  name=f"Matrix head: {head.title()}")
+        x += w
+    comps = ctx.comps
+    area_top = top + 0.46
+    area = top + height - area_top - 0.1
+    n = max(1, len(comps))
+    row_h = min(2.4, (area - 0.1 * (n - 1)) / n)
     if not comps:
-        text_box(
-            slide,
-            MARGIN_X,
-            top + 0.3,
-            CONTENT_W,
-            1.0,
-            Para("No competitors with evidence were recorded for this run.", 18, MUTED),
-            fill=SURFACE,
-            line=BORDER,
-            name="No competitors",
+        page.text(MARGIN_X + 0.2, area_top, lw - 0.4, 0.8,
+                  Para("No competitor met the evidence threshold in the saved research.", 13,
+                       MUTED, after=0), pad=0.02, name="No competitors")
+    y = area_top
+    for comp in comps:
+        box(s, MARGIN_X + 0.1, y, lw - 0.2, row_h, fill=CREAM, line=BORDER,
+            name=f"Competitor: {comp.name}")
+        x = MARGIN_X
+        tight = row_h < 1.0
+        paras = [Para(comp.name, 12.5 if tight else 15, INK, bold=True, after=1)]
+        if not tight:
+            paras.append(Para(_host(comp.url), 11, MUTED, after=0))
+        page.text(x + 0.18, y + 0.06, cols[0] - 0.22, row_h - 0.12, paras, pad=0.02,
+                  name=f"Name: {comp.name}")
+        x += cols[0]
+        offer_paras = [
+            Para(_plain(comp.offer) or "Offer not recorded.", 11 if tight else 13, INK, after=6)
+        ]
+        if comp.location_relevance and row_h >= 1.4:
+            offer_paras.append(Para("Local relevance: " + _plain(comp.location_relevance), 11,
+                                    MUTED, after=0))
+        page.text(x + 0.08, y + 0.06, cols[1] - 0.16, row_h - 0.12, offer_paras,
+                  pad=0.02, name=f"Offer: {comp.name}")
+        x += cols[1]
+        chans = comp.channels[: 2 if tight else 3] or ["Not recorded"]
+        page.text(x + 0.08, y + 0.06, cols[2] - 0.12, row_h - 0.12,
+                  _bullets(chans, 11 if tight else 12),
+                  pad=0.02, name=f"Channels: {comp.name}")
+        x += cols[2]
+        price = comp.price
+        verified = price.status == "verified" and price.amount is not None
+        label = (
+            f"{_currency(price.currency or '')}{price.amount:g}" if verified else "PRICE UNKNOWN"
         )
-        _notes(slide, spec, [])
-        return
-    label_w = 1.75
-    col_ws = split_widths(CONTENT_W - label_w - 0.1, len(comps), 0.1)
-    header_h = 0.62
-    gap = 0.1
-    avail = CONTENT_BOTTOM - top - header_h - gap
-    total_w = sum(r[2] for r in ROW_SPEC)
-    heights = [(avail - gap * (len(ROW_SPEC) - 1)) * r[2] / total_w for r in ROW_SPEC]
-    x = MARGIN_X + label_w + gap
-    for comp, w in zip(comps, col_ws, strict=True):
-        text_box(
-            slide,
-            x,
-            top,
-            w,
-            header_h,
-            [
-                Para(comp.name, 17, TEXT, bold=True, after=0),
-                Para(_host(comp.url), 11, MUTED, after=0),
-            ],
-            fill=SURFACE_2,
-            line=TEAL,
-            anchor=MSO_ANCHOR.MIDDLE,
-            pad=0.1,
-            name=f"Competitor {comp.name}",
+        chip(s, x + 0.08, y + 0.1, label, TEAL_LIGHT if verified else GOLD_LIGHT,
+             TEAL if verified else GOLD, size=11, h=0.34, name=f"Price: {comp.name}",
+             line=TEAL if verified else GOLD)
+        sub = (
+            " ".join(p for p in (price.unit, price.pack_size) if p) or "verified with evidence"
+            if verified
+            else "Not verified"
         )
-        x += w + gap
-    y = top + header_h + gap
-    for (glyph, label, _), h in zip(ROW_SPEC, heights, strict=True):
-        box(slide, MARGIN_X, y, label_w, h, fill=SURFACE, line=BORDER, name="Row label panel")
-        badge(slide, MARGIN_X + 0.12, y + (h - 0.36) / 2, 0.36, glyph, TEAL, size=12)
-        text_box(
-            slide,
-            MARGIN_X + 0.55,
-            y,
-            label_w - 0.6,
-            h,
-            Para(label, 13, TEXT, bold=True, after=0),
-            pad=0.03,
-            anchor=MSO_ANCHOR.MIDDLE,
-            name=f"Row {label}",
-        )
-        x = MARGIN_X + label_w + gap
-        for comp, w in zip(comps, col_ws, strict=True):
-            verified = comp.price.status == "verified"
-            fill, line = SURFACE, BORDER
-            if label == "Offering":
-                paras = [Para(comp.offer or "Not evidenced", 13)]
-            elif label == "Subscription":
-                paras = [Para(_subscription_text(comp), 13)]
-            elif label == "Channels":
-                paras = [Para(", ".join(comp.channels) or "Not evidenced", 13)]
-            elif label == "Pricing" and verified:
-                p = comp.price
-                paras = [
-                    Para("●  VERIFIED", 11, TEAL, bold=True, after=1),
-                    Para(f"{p.currency} {p.amount:g} per {p.unit}", 14, TEXT, bold=True),
-                ]
-                fill, line = TEAL_DARK, TEAL
-            elif label == "Pricing":
-                paras = [
-                    Para("●  NOT VERIFIED", 11, AMBER, bold=True, after=1),
-                    Para("Price unknown", 14, TEXT, bold=True),
-                ]
-                fill, line = AMBER_DARK, AMBER
-            elif label == "Evidence":
-                hosts = ", ".join(dict.fromkeys(_host(u) for u in comp.evidence_urls)) or "none"
-                paras = [Para(f"{len(comp.evidence_urls)} source page(s): {hosts}", 12)]
-            else:
-                items = comp.unknowns[:2] or ["None recorded"]
-                paras = [Para(i, 12, TEXT, bullet=True, after=2) for i in items]
-            text_box(
-                slide,
-                x,
-                y,
-                w,
-                h,
-                paras,
-                fill=fill,
-                line=line,
-                anchor=MSO_ANCHOR.MIDDLE,
-                pad=0.1,
-                name=f"{label}: {comp.name}",
-            )
-            x += w + gap
-        y += h + gap
-    extra = [
-        f"{c.name}: offer={c.offer}; channels={', '.join(c.channels) or 'n/a'}; "
-        f"price={c.price.status}; unknowns={'; '.join(c.unknowns) or 'none'}"
-        for c in comps
-    ]
-    _notes(slide, spec, extra)
+        compact = row_h < 1.25
+        urls = f"{len(comp.evidence_urls)} source URL(s)"
+        if compact:
+            note_paras = [Para(f"{sub} · {urls}", 10.5, MUTED, after=0)]
+        else:
+            note_paras = [Para(sub, 11, MUTED, bold=True, after=2), Para(urls, 11, MUTED, after=4)]
+            if comp.unknowns:
+                note_paras.append(Para("Unknown: " + _short(_plain(comp.unknowns[0]), 240), 10.5,
+                                       MUTED, after=0))
+        if row_h >= 0.9:
+            page.text(x + 0.08, y + 0.5, cols[3] - 0.26, row_h - 0.56, note_paras,
+                      pad=0.02, name=f"Price note: {comp.name}")
+        y += row_h + 0.1
+
+    # right: findings and coverage
+    top_h = height * 0.56
+    y = panel(s, xr, top, rw, top_h, "Competitive findings", accent=BURGUNDY)
+    page.text(xr + 0.2, y, rw - 0.35, top + top_h - y - 0.1, _bullets(spec.bullets, 13.5),
+              pad=0.02, name="Findings")
+    cy = top + top_h + GAP
+    ch = top + height - cy
+    y = panel(s, xr, cy, rw, ch, "Evidence coverage", accent=TEAL)
+    peak = max([len(c.evidence_urls) for c in comps] + [1])
+    each = min(0.62, (cy + ch - y - 0.1) / max(1, len(comps)))
+    if each < 0.34:  # many competitors: one compact list instead of a bar per competitor
+        joined = "  ·  ".join(f"{c.name}: {len(c.evidence_urls)}" for c in comps)
+        page.text(xr + 0.2, y, rw - 0.4, cy + ch - y - 0.1,
+                  [Para("Source URLs per competitor", 10.5, MUTED, bold=True, after=3),
+                   Para(joined, 11, INK, after=0)], pad=0.02, name="Coverage list")
+    else:
+        for comp in comps:
+            page.text(xr + 0.2, y, rw - 0.4, 0.26,
+                      Para(f"{comp.name}: {len(comp.evidence_urls)} source URL(s)", 11, INK,
+                           bold=True, after=0), pad=0.02,
+                      name=f"Coverage label: {comp.name}")
+            bar(s, xr + 0.2, y + 0.3, rw - 0.4, 0.14, len(comp.evidence_urls) / peak, TEAL,
+                name=f"Coverage: {comp.name}")
+            y += each
+    notes.append("Matrix columns: competitor, offer and positioning, channels, price status")
+    page.finish(notes)
 
 
 # ----------------------------------------------------------------------------- slide 3
-def _state_cell(slide, x, y, w, h, label: str, good: bool, name: str) -> None:
-    fill, line, color = (TEAL_DARK, TEAL, TEAL) if good else (AMBER_DARK, AMBER, AMBER)
-    text_box(
-        slide,
-        x,
-        y,
-        w,
-        h,
-        Para(label, 12, color, bold=True, align=PP_ALIGN.CENTER, after=0),
-        fill=fill,
-        line=line,
-        anchor=MSO_ANCHOR.MIDDLE,
-        pad=0.04,
-        name=name,
-    )
+def _slide_customers(page: Page) -> None:
+    ctx, spec, s = page.ctx, page.spec, page.slide
+    top, height = page.top, page.height
+    findings = list(ctx.source.reviews.findings)
+    notes: list[str] = []
 
+    by_comp: dict[str, list] = {}
+    for f in findings:
+        by_comp.setdefault(f.competitor, []).append(f)
+    shown: list = []
+    for rank in range(4):  # round-robin so every researched competitor is represented
+        for group in by_comp.values():
+            if rank < len(group) and len(shown) < 4:
+                shown.append(group[rank])
 
-def _slide_evidence(prs, ctx: Ctx, index: int, spec: SlideSpec) -> None:
-    slide, top = _chrome(prs, ctx, index, spec)
-    comps = ctx.comps[:5]
-    right_w = 5.05
-    left_w = CONTENT_W - right_w - GAP
-    avail = CONTENT_BOTTOM - top
-    inner = panel(
-        slide, MARGIN_X, top, left_w, avail, "Evidence coverage by competitor", accent=BLUE
-    )
-    cols = ["Offer", "Channels", "Price", "Praise", "Pain points", "Pages"]
-    name_w = 1.5
-    cell_w = (left_w - 0.3 - name_w - GAP * len(cols)) / len(cols)
-    x0 = MARGIN_X + 0.18
-    for i, col in enumerate(cols):
-        text_box(
-            slide,
-            x0 + name_w + GAP + i * (cell_w + GAP),
-            inner,
-            cell_w,
-            0.5,
-            Para(col.upper(), 10, MUTED, bold=True, align=PP_ALIGN.CENTER, after=0),
-            pad=0.02,
-            name=f"Column {col}",
-        )
-    rows = max(1, len(comps))
-    grid_top = inner + 0.56
-    legend_h = 0.4
-    row_h = min(1.5, (top + avail - grid_top - legend_h - 0.1 - GAP * (rows - 1)) / rows)
-    for r, comp in enumerate(comps):
-        y = grid_top + r * (row_h + GAP)
-        text_box(
-            slide,
-            x0,
-            y,
-            name_w,
-            row_h,
-            Para(comp.name, 13, TEXT, bold=True, after=0),
-            pad=0.04,
-            anchor=MSO_ANCHOR.MIDDLE,
-            name=f"Coverage {comp.name}",
-        )
-        praise = ctx.findings(comp.name, "praise")
-        complaints = ctx.findings(comp.name, "complaint")
-        verified = comp.price.status == "verified"
-        cells = [
-            ("Yes" if comp.offer else "None", bool(comp.offer)),
-            ("Yes" if comp.channels else "None", bool(comp.channels)),
-            ("Verified" if verified else "Unknown", verified),
-            (f"{len(praise)} found" if praise else "None", bool(praise)),
-            (f"{len(complaints)} found" if complaints else "None found", bool(complaints)),
-            (f"{len(comp.evidence_urls)}", bool(comp.evidence_urls)),
-        ]
-        for i, (label, good) in enumerate(cells):
-            _state_cell(
-                slide,
-                x0 + name_w + GAP + i * (cell_w + GAP),
-                y,
-                cell_w,
-                row_h,
-                label,
-                good,
-                f"{cols[i]}: {comp.name}",
-            )
-    ly = top + avail - legend_h
-    chip(slide, x0, ly, "SUPPORTED", TEAL_DARK, TEAL, size=11, line=TEAL, name="Legend supported")
-    chip(
-        slide,
-        x0 + 1.4,
-        ly,
-        "UNKNOWN / NOT RETRIEVED",
-        AMBER_DARK,
-        AMBER,
-        size=11,
-        line=AMBER,
-        name="Legend unknown",
-    )
+    top_h = height * 0.55
+    n = max(1, len(shown))
+    card_w = (CONTENT_W - GAP * (n - 1)) / n
+    if not shown:
+        y = panel(s, MARGIN_X, top, CONTENT_W, top_h, "Customer feedback retrieved",
+                  accent=BURGUNDY)
+        page.text(MARGIN_X + 0.2, y, CONTENT_W - 0.4, 1.0,
+                  Para("No customer feedback was retrieved in the saved research. Customer "
+                       "needs and pain points are therefore unverified.", 13, MUTED, after=0),
+                  pad=0.02, name="No feedback")
+    for i, f in enumerate(shown):
+        x = MARGIN_X + i * (card_w + GAP)
+        accent = TEAL if f.kind == "praise" else BURGUNDY
+        box(s, x, top, card_w, top_h, fill=PAPER, line=BORDER, name=f"Insight card {i + 1}")
+        box(s, x, top + 0.1, 0.06, top_h - 0.2, fill=accent, round_=False, name="Accent")
+        chip(s, x + 0.2, top + 0.12, f.competitor.upper()[:22], TEAL_LIGHT if f.kind == "praise"
+             else BURGUNDY_LIGHT, accent, size=10.5, h=0.32, name=f"Source: {f.competitor}")
+        basis = {"quoted": "Quoted", "reported": "Reported", "inferred": "Inferred"}[f.basis]
+        origin = f"{basis} · {_host(f.source_url)}" if f.source_url else basis
+        page.text(x + 0.2, top + 0.5, card_w - 0.35, 0.46,
+                  [Para(origin, 10.5, MUTED, bold=True, after=0),
+                   Para(f"{f.kind.title()} · not independently verified", 10.5, MUTED,
+                        after=0)],
+                  pad=0.02, name=f"Provenance {i + 1}")
+        page.text(x + 0.2, top + 1.0, card_w - 0.35, top_h - 1.12,
+                  Para(f.text, 13, INK, after=0, italic=True), pad=0.02,
+                  name=f"Quote {i + 1}")
+    if len(findings) > len(shown):
+        notes.append(f"{len(findings) - len(shown)} more finding(s) are in the saved report")
 
-    supported = [f for f in ctx.source.reviews.findings if f.basis in ("quoted", "reported")]
-    vendor_only = bool(supported) and all(
-        any(_host(f.source_url or "") == _host(c.url) for c in ctx.comps) for f in supported
-    )
-    complaints_total = sum(1 for f in ctx.source.reviews.findings if f.kind == "complaint")
-    access = [u for c in ctx.comps for u in c.unknowns if _ACCESS.search(u)]
-    access += [g for g in ctx.source.reviews.gaps if _ACCESS.search(g)]
-    unverified: list[str] = []
-    if vendor_only:
-        unverified.append(
-            "All retrieved praise is published on the vendor's own site; independent "
-            "verification is unknown."
-        )
-    if complaints_total == 0:
-        unverified.append("No verifiable customer complaints were retrieved.")
-    unverified += [
-        _short(g, 80)
-        for g in ctx.source.reviews.gaps
-        if g not in access and not (complaints_total == 0 and re.search(r"complaint", g, re.I))
-    ][:1]
-    unverified = unverified[:2]
-    validation = []
-    if complaints_total == 0:
-        validation.append("Gather independent reviews or run customer interviews.")
-    if ctx.unverified:
-        validation.append("Confirm unit price and pack size directly with each vendor.")
-    validation.append("Capture first-hand feedback during the proposed pilot.")
-    quoted = sum(1 for f in supported if f.basis == "quoted")
-    cards = [
-        (
-            "Supported claims",
-            TEAL,
-            [f"{len(supported)} customer comment(s) with a source URL ({quoted} quoted)"]
-            if supported
-            else ["No customer comments with a source were retrieved."],
-        ),
-        ("Unverified", AMBER, unverified or ["Nothing flagged beyond the gaps shown."]),
-        (
-            "Source-access limits",
-            PURPLE,
-            [_short(a, 100) for a in dict.fromkeys(access)][:2]
-            or ["No access problems were recorded."],
-        ),
-        ("Recommended validation (not yet done)", BLUE, validation),
+    # bottom row: counts, pain points and opportunities, limits of the data
+    by = top + top_h + GAP
+    bh = top + height - by
+    w1 = 3.6
+    w2 = (CONTENT_W - w1 - 2 * GAP) * 0.5
+    w3 = CONTENT_W - w1 - w2 - 2 * GAP
+    x1, x2, x3 = MARGIN_X, MARGIN_X + w1 + GAP, MARGIN_X + w1 + w2 + 2 * GAP
+
+    praise = sum(1 for f in findings if f.kind == "praise")
+    complaint = len(findings) - praise
+    y = panel(s, x1, by, w1, bh, "Findings retrieved", accent=TEAL)
+    peak = max(praise, complaint, 1)
+    for label, count, color in (("Praise", praise, TEAL), ("Complaints", complaint, BURGUNDY)):
+        page.text(x1 + 0.2, y, w1 - 0.4, 0.26,
+                  Para(f"{label}: {count}", 12, INK, bold=True, after=0), pad=0.02,
+                  name=f"Count label: {label}")
+        bar(s, x1 + 0.2, y + 0.3, w1 - 0.4, 0.15, count / peak, color, name=f"Count: {label}")
+        y += 0.56
+
+    y = panel(s, x2, by, w2, bh, "Pain points & opportunities", accent=BURGUNDY)
+    page.text(x2 + 0.2, y, w2 - 0.35, by + bh - y - 0.1, _bullets(spec.bullets, 13),
+              pad=0.02, name="Pain points")
+
+    y = panel(s, x3, by, w3, bh, "Limits of the customer data", accent=GOLD)
+    limits = [_short(_plain(g), 260) for g in ctx.source.reviews.gaps[:3]] or [
+        "No customer-data gaps were recorded."
     ]
-    overhead = 0.52  # panel heading band plus bottom padding
-    texts = [
-        needed_height_in(
-            [Para(line, 12, TEXT, bullet=True, after=2) for line in lines], right_w - 0.3, pad=0.03
-        )
-        for _, _, lines in cards
-    ]
-    card_gap = 0.1
-    room = avail - card_gap * 3 - overhead * len(cards)
-    small = [t for t in texts if t <= 0.4]  # single-line cards keep exactly what they need
-    big_total = sum(t for t in texts if t > 0.4) or 1.0
-    scale = (room - sum(small)) / big_total  # big cards grow into spare space or shrink evenly
-    heights = [overhead + (t if t <= 0.4 else t * scale) for t in texts]
-    rx = MARGIN_X + left_w + GAP
-    y = top
-    for (heading, accent, lines), h in zip(cards, heights, strict=True):
-        ti = panel(slide, rx, y, right_w, h, heading, accent=accent)
-        text_box(
-            slide,
-            rx + 0.18,
-            ti,
-            right_w - 0.3,
-            y + h - ti - 0.06,
-            [Para(line, 12, TEXT, bullet=True, after=2) for line in lines],
-            pad=0.03,
-            name=f"Card {heading}",
-        )
-        y += h + card_gap
-    _notes(slide, spec, [f"{f.competitor} ({f.basis}): {f.text}" for f in supported])
+    page.text(x3 + 0.2, y, w3 - 0.35, by + bh - y - 0.1, _bullets(limits, 12.5),
+              pad=0.02, name="Limitations")
+    page.finish(notes)
 
 
 # ----------------------------------------------------------------------------- slide 4
-def _slide_flow(prs, ctx: Ctx, index: int, spec: SlideSpec) -> None:
-    slide, top = _chrome(prs, ctx, index, spec)
-    s = ctx.source.strategy
-    observed = [
-        f"{c.name}: {_short((_sentences(c.offer) or [c.offer])[0] or 'offer not evidenced', 85)}"
-        for c in ctx.comps[:4]
-    ] or ["No competitor findings recorded."]
-    gaps: list[str] = []
-    if ctx.unverified:
-        gaps.append("Price not verified: " + ", ".join(ctx.unverified[:4]))
-    gaps += [_short(g, 90) for g in ctx.source.reviews.gaps[:2]]
-    for c in ctx.comps:
-        gaps += [_short(u, 80) for u in c.unknowns[:1]]
-    gaps = list(dict.fromkeys(gaps))[:4] or ["No gaps recorded."]
-    hypothesis = [_short(s.market_gap, 230) or "No market gap was stated."]
-    if s.rationale:
-        hypothesis.append(_short(s.rationale, 130))
-    diff = [_unlabel(d) for d in (s.recommended_offer, s.positioning_line) if d]
-    stages = [
-        (
-            "1  OBSERVED",
-            "Competitor characteristics",
-            "VERIFIED FINDINGS",
-            TEAL,
-            TEAL_DARK,
-            observed,
-        ),
-        (
-            "2  EVIDENCE GAPS",
-            "What research could not confirm",
-            "RESEARCH LIMITATIONS",
-            AMBER,
-            AMBER_DARK,
-            gaps,
-        ),
-        ("3  OPPORTUNITY", "Hypothesis from the gaps", "ASSUMPTION", BLUE, SURFACE_2, hypothesis),
-        (
-            "4  DIFFERENTIATION",
-            "Proposed response",
-            "RECOMMENDATION",
-            PURPLE,
-            PURPLE_DARK,
-            [_short(d, 200) for d in diff] or ["No recommendation recorded."],
-        ),
-    ]
-    legend_h = 0.42
-    avail = CONTENT_BOTTOM - top - legend_h - GAP
-    arrow_w = 0.42
-    w = (CONTENT_W - 3 * arrow_w) / 4
-    x = MARGIN_X
-    for i, (head, sub, tag, accent, fill, lines) in enumerate(stages):
-        box(slide, x, top, w, avail, fill=fill, line=accent, line_w=1.5, name=f"Stage {i + 1}")
-        text_box(
-            slide,
-            x + 0.12,
-            top + 0.1,
-            w - 0.24,
-            0.34,
-            Para(head, 14, accent, bold=True, after=0),
-            pad=0.02,
-            name=f"Stage {i + 1} heading",
-        )
-        text_box(
-            slide,
-            x + 0.12,
-            top + 0.44,
-            w - 0.24,
-            0.32,
-            Para(sub, 12, MUTED, after=0),
-            pad=0.02,
-            name=f"Stage {i + 1} subtitle",
-        )
-        chip(
-            slide,
-            x + 0.12,
-            top + 0.82,
-            tag,
-            NAVY,
-            accent,
-            size=11,
-            line=accent,
-            name=f"Stage {i + 1} tag",
-        )
-        text_box(
-            slide,
-            x + 0.12,
-            top + 1.22,
-            w - 0.24,
-            avail - 1.32,
-            [Para(line, 14, TEXT, bullet=i < 2, after=8) for line in lines],
-            pad=0.04,
-            name=f"Stage {i + 1} content",
-        )
-        if i < 3:
-            ax = x + w + 0.04
-            arrow(
-                slide,
-                ax,
-                top + avail / 2,
-                ax + arrow_w - 0.08,
-                top + avail / 2,
-                TEAL,
-                width_pt=3.0,
-                name=f"Flow arrow {i + 1}",
-            )
-        x += w + arrow_w
-    ly = CONTENT_BOTTOM - legend_h
-    lx = MARGIN_X
-    for label, accent, fill in (
-        ("VERIFIED FINDING", TEAL, TEAL_DARK),
-        ("RESEARCH LIMITATION", AMBER, AMBER_DARK),
-        ("ASSUMPTION", BLUE, SURFACE_2),
-        ("RECOMMENDATION", PURPLE, PURPLE_DARK),
-    ):
-        _, cw = chip(
-            slide,
-            lx,
-            ly + 0.05,
-            label,
-            fill,
-            accent,
-            size=11,
-            line=accent,
-            name=f"Legend {label.title()}",
-        )
-        lx += cw + 0.2
-    text_box(
-        slide,
-        lx + 0.1,
-        ly,
-        SLIDE_W - MARGIN_X - lx - 0.1,
-        legend_h,
-        Para(
-            "A hypothesis, not a proven fact.",
-            12,
-            MUTED,
-            italic=True,
-            after=0,
-        ),
-        pad=0.03,
-        anchor=MSO_ANCHOR.MIDDLE,
-        name="Flow caveat",
+def _slide_solution(page: Page) -> None:
+    ctx, spec, s = page.ctx, page.spec, page.slide
+    st = ctx.source.strategy
+    top, height = page.top, page.height
+    notes: list[str] = []
+
+    hero_h = 0.95
+    box(s, MARGIN_X, top, CONTENT_W, hero_h, fill=BURGUNDY_LIGHT, line=BURGUNDY,
+        name="Value proposition")
+    chip(s, MARGIN_X + 0.2, top + hero_h / 2 - 0.16, "RECOMMENDATION", WHITE, BURGUNDY, size=11,
+         h=0.32, name="Positioning tag", line=BURGUNDY)
+    x0 = MARGIN_X + 0.2 + chip_width("RECOMMENDATION", 11) + 0.25
+    positioning = _unlabel(st.positioning_line) or _unlabel(st.recommended_offer) or (
+        "No positioning statement was recorded."
     )
-    _notes(slide, spec, observed + gaps + hypothesis + diff)
+    page.text(x0, top + 0.08, SLIDE_W - MARGIN_X - 0.2 - x0, hero_h - 0.16,
+              Para(positioning, 19, INK, bold=True, font=HEAD_FONT, after=0, italic=True),
+              pad=0.02, anchor=MSO_ANCHOR.MIDDLE, name="Value proposition text")
+
+    status_h = 1.0
+    cols_y = top + hero_h + GAP
+    cols_h = top + height - cols_y - status_h - GAP
+    cw = (CONTENT_W - 2 * GAP) / 3
+
+    # observed
+    y = panel(s, MARGIN_X, cols_y, cw, cols_h, "What the research shows", accent=BLUE)
+    observed = []
+    for c in ctx.comps:
+        row = next((r for r in st.comparison_matrix if r.get("competitor") == c.name), {})
+        observed.append(f"{c.name}: {_short(_plain(row.get('strength') or c.offer), 260)}")
+    page.text(MARGIN_X + 0.2, y, cw - 0.35, cols_y + cols_h - y - 0.1,
+              _bullets(observed or ["No competitor findings were recorded."], 13),
+              pad=0.02, name="Observed")
+    # differentiation
+    x2 = MARGIN_X + cw + GAP
+    y = panel(s, x2, cols_y, cw, cols_h, "Differentiation opportunities", accent=TEAL)
+    page.text(x2 + 0.2, y, cw - 0.35, cols_y + cols_h - y - 0.1, _bullets(spec.bullets, 13.5),
+              pad=0.02, name="Opportunities")
+    # recommendation
+    x3 = x2 + cw + GAP
+    y = panel(s, x3, cols_y, cw, cols_h, "Recommended offer", accent=BURGUNDY)
+    why = " ".join(_sentences(_plain(st.rationale))[:2])
+    paras = [Para(_unlabel(st.recommended_offer) or "No offer recommendation was recorded.", 13.5,
+                  INK, bold=True, after=8)]
+    if why:
+        paras.append(Para("Why: " + why, 12, MUTED, after=0))
+    page.text(x3 + 0.2, y, cw - 0.35, cols_y + cols_h - y - 0.1, paras, pad=0.02,
+              name="Recommended offer")
+
+    # status row: what is verified, unverified, assumed
+    sy = cols_y + cols_h + GAP
+    unverified = ", ".join(ctx.unverified) if ctx.unverified else "none"
+    cards = (
+        ("VERIFIED", f"{ctx.n_evidence} of {len(ctx.comps)} competitors",
+         "have public evidence URLs for their offer and channels.", TEAL, TEAL_LIGHT),
+        ("UNVERIFIED", f"{len(ctx.unverified)} competitor price(s)",
+         f"are unknown or not verified: {unverified}.", GOLD, GOLD_LIGHT),
+        ("ASSUMPTION", "The gap is an inference",
+         "drawn from this research; it is not a market size or a claim of exclusivity.",
+         BURGUNDY, BURGUNDY_LIGHT),
+    )
+    for i, (tag, head, body, accent, fill) in enumerate(cards):
+        x = MARGIN_X + i * (cw + GAP)
+        box(s, x, sy, cw, status_h, fill=fill, line=accent, name=f"Status card {i + 1}")
+        page.text(
+            x + 0.15, sy + 0.05, cw - 0.3, status_h - 0.1,
+            [Para(tag, 10.5, accent, bold=True, after=1), Para(head, 13, INK, bold=True, after=1),
+             Para(body, 11, INK, after=0)],
+            pad=0.02, anchor=MSO_ANCHOR.MIDDLE, name=f"Status text {i + 1}",
+        )
+    notes.append("Status cards: verified evidence, unverified prices, assumption")
+    page.finish(notes)
 
 
 # ----------------------------------------------------------------------------- slide 5
+def parse_weeks(bullets: list[str]) -> list[tuple[str, str]]:
+    weeks = []
+    for b in bullets:
+        m = _WEEK.match(b)
+        if m:
+            weeks.append((f"Week {int(m.group(1))}", m.group(2).strip()))
+    if weeks:
+        return weeks
+    return [(f"Step {i}", b) for i, b in enumerate(bullets, 1)]
+
+
+def _slide_gtm(page: Page) -> None:
+    ctx, spec, s = page.ctx, page.spec, page.slide
+    src, st = ctx.source, ctx.source.strategy
+    top, height = page.top, page.height
+    wa, wb = 3.9, 4.3
+    wc = CONTENT_W - wa - wb - 2 * GAP
+    xa, xb, xc = MARGIN_X, MARGIN_X + wa + GAP, MARGIN_X + wa + wb + 2 * GAP
+    notes: list[str] = []
+
+    # A: segment and positioning
+    y = panel(s, xa, top, wa, height, "Target segment & positioning", accent=BURGUNDY)
+    paras = [Para(src.input.target_customer, 18, INK, bold=True, font=HEAD_FONT, after=0)]
+    h = needed_height_in(paras, wa - 0.4)
+    page.text(xa + 0.2, y, wa - 0.4, h, paras, pad=0.02, name="Target segment")
+    y += h + 0.02
+    page.text(xa + 0.2, y, wa - 0.4, 0.3, Para(f"in {src.input.city}", 14, TEAL, bold=True,
+                                                after=0), pad=0.02, name="Segment city")
+    y += 0.42
+    chip(s, xa + 0.2, y, "RECOMMENDATION", BURGUNDY_LIGHT, BURGUNDY, size=11, h=0.34,
+         name="Positioning recommendation tag", line=BURGUNDY)
+    y += 0.42
+    page.text(xa + 0.2, y, wa - 0.4, top + height - y - 0.12, _bullets(spec.bullets, 14),
+              pad=0.02, name="Positioning recommendations")
+
+    # B: channels observed
+    y = panel(s, xb, top, wb, height, "Channels observed in the market", accent=BLUE)
+    seen: dict[str, list[str]] = {}
+    for c in ctx.comps:
+        for ch in c.channels:
+            seen.setdefault(ch, []).append(c.name)
+    rows = list(seen.items())[:6]
+    row_h = 0.62
+    if not rows:
+        page.text(xb + 0.2, y, wb - 0.4, 0.6, Para("No channels were recorded.", 12, MUTED,
+                                                    after=0), pad=0.02, name="No channels")
+        y += 0.7
+    for ch, who in rows:
+        box(s, xb + 0.2, y, wb - 0.4, row_h - 0.08, fill=BLUE_LIGHT, line=BLUE,
+            name=f"Channel: {ch}")
+        page.text(xb + 0.3, y + 0.02, wb - 0.6, row_h - 0.12,
+                  [Para(_short(ch, 60), 13, INK, bold=True, after=0),
+                   Para("Seen at " + ", ".join(who), 11, MUTED, after=0)],
+                  pad=0.02, anchor=MSO_ANCHOR.MIDDLE, name=f"Channel text: {ch}")
+        y += row_h
+    if rows:
+        page.text(xb + 0.2, y + 0.04, wb - 0.4, 0.5,
+                  Para("Observed among the researched competitors; not a verified channel plan.",
+                       10.5, MUTED, after=0, italic=True), pad=0.02, name="Channel caveat")
+        y += 0.6
+    prereq = [_short(t, 200) for t in _sentences(_unlabel(st.recommended_offer))[1:3]]
+    if prereq and top + height - y > 0.8:
+        page.text(xb + 0.2, y, wb - 0.4, 0.26,
+                  Para("LAUNCH PREREQUISITES", 10.5, MUTED, bold=True, after=0), pad=0.02,
+                  name="Prerequisites heading")
+        page.text(xb + 0.2, y + 0.28, wb - 0.4, top + height - y - 0.4, _bullets(prereq, 12.5),
+                  pad=0.02, name="Prerequisites")
+
+    # C: phases
+    y = panel(s, xc, top, wc, height, "Launch phases (recommended actions)", accent=TEAL)
+    weeks = parse_weeks(src_plan(page))
+    n = max(1, len(weeks))
+    each = min(1.3, (top + height - y - 0.1) / n)
+    if not weeks:
+        page.text(xc + 0.2, y, wc - 0.4, 0.6, Para("No launch plan was recorded.", 12, MUTED,
+                                                    after=0), pad=0.02, name="No phases")
+    for i, (label, body) in enumerate(weeks, 1):
+        badge(s, xc + 0.2, y + 0.04, 0.4, str(i), TEAL, WHITE, size=12, name=f"Phase badge {i}")
+        page.text(xc + 0.72, y, wc - 0.9, each - 0.06,
+                  [Para(label.upper(), 10.5, TEAL, bold=True, after=1),
+                   Para(_short(_sentences(body)[0] if _sentences(body) else body, 200), 13,
+                        INK, after=0)],
+                  pad=0.02, name=f"Phase {i}")
+        if i < len(weeks):
+            arrow(s, xc + 0.4, y + 0.46, xc + 0.4, y + each + 0.02, TEAL, width_pt=1.5,
+                  head=False, name=f"Phase link {i}")
+        y += each
+    notes.append(f"Phases shown: {len(weeks)}")
+    page.finish(notes)
+
+
+def src_plan(page: Page) -> list[str]:
+    """Launch-plan bullets: the sixth slide's validated text (the saved 30-day plan)."""
+    return page.ctx.deck.slides[5].bullets
+
+
+# ----------------------------------------------------------------------------- slide 6
 def _price_parts(raw: str) -> tuple[str, str, str, str]:
     """(headline amount, plan description, derived calculation, remaining note)."""
     match = _AMOUNT.search(raw or "")
@@ -853,328 +777,106 @@ def _price_parts(raw: str) -> tuple[str, str, str, str]:
     return headline, plan[:1].upper() + plan[1:], derived, note
 
 
-def _slide_pricing(prs, ctx: Ctx, index: int, spec: SlideSpec) -> None:
-    slide, top = _chrome(prs, ctx, index, spec)
-    s = ctx.source.strategy
-    avail = CONTENT_BOTTOM - top
-    hero_w = 4.9
-    headline, plan, derived, note = _price_parts(s.recommended_price)
-    box(
-        slide,
-        MARGIN_X,
-        top,
-        hero_w,
-        avail,
-        fill=PURPLE_DARK,
-        line=PURPLE,
-        line_w=2.0,
-        name="Price hero",
-    )
-    text_box(
-        slide,
-        MARGIN_X + 0.15,
-        top + 0.15,
-        hero_w - 0.3,
-        0.62,
-        Para(
-            "RECOMMENDATION — NOT A VERIFIED MARKET PRICE",
-            13,
-            AMBER,
-            bold=True,
-            align=PP_ALIGN.CENTER,
-            after=0,
-        ),
-        fill=AMBER_DARK,
-        line=AMBER,
-        anchor=MSO_ANCHOR.MIDDLE,
-        pad=0.08,
-        name="Price warning",
-    )
-    text_box(
-        slide,
-        MARGIN_X + 0.15,
-        top + 0.95,
-        hero_w - 0.3,
-        1.3,
-        Para(
-            headline or "No price",
-            66 if headline else 30,
-            TEXT,
-            bold=True,
-            align=PP_ALIGN.CENTER,
-            after=0,
-        ),
-        anchor=MSO_ANCHOR.MIDDLE,
-        pad=0.02,
-        name="Price value",
-    )
-    y = top + 2.3
-    if plan:
-        text_box(
-            slide,
-            MARGIN_X + 0.2,
-            y,
-            hero_w - 0.4,
-            0.75,
-            Para(plan, 17, TEXT, bold=True, align=PP_ALIGN.CENTER, after=0),
-            pad=0.03,
-            anchor=MSO_ANCHOR.MIDDLE,
-            name="Plan description",
-        )
-        y += 0.85
-    if derived:
-        text_box(
-            slide,
-            MARGIN_X + 0.4,
-            y,
-            hero_w - 0.8,
-            0.62,
-            [
-                Para("DERIVED CALCULATION", 10, MUTED, bold=True, align=PP_ALIGN.CENTER, after=0),
-                Para(
-                    derived[:1].upper() + derived[1:],
-                    14,
-                    BLUE,
-                    bold=True,
-                    align=PP_ALIGN.CENTER,
-                    after=0,
-                ),
-            ],
-            fill=SURFACE,
-            line=BLUE,
-            anchor=MSO_ANCHOR.MIDDLE,
-            pad=0.05,
-            name="Derived calc",
-        )
-        y += 0.78
-    foot = (
-        note[:1].upper() + note[1:]
-        if note
-        else ("Proposed test price only; not validated with customers.")
-    )
-    if ctx.unverified:
-        foot += " Competitor prices are unverified, so no price comparison is possible."
-    text_box(
-        slide,
-        MARGIN_X + 0.2,
-        y,
-        hero_w - 0.4,
-        top + avail - y - 0.1,
-        Para(_short(foot, 230), 13, MUTED, align=PP_ALIGN.CENTER, after=0),
-        pad=0.04,
-        name="Price caveat",
-    )
+def _slide_financials(page: Page) -> None:
+    ctx, spec, s = page.ctx, page.spec, page.slide
+    src, st = ctx.source, ctx.source.strategy
+    top, height = page.top, page.height
+    notes: list[str] = []
+    top_h = height * 0.6
+    wa, wb = 3.6, 5.2
+    wc = CONTENT_W - wa - wb - 2 * GAP
+    xa, xb, xc = MARGIN_X, MARGIN_X + wa + GAP, MARGIN_X + wa + wb + 2 * GAP
 
-    rx = MARGIN_X + hero_w + GAP
-    rw = CONTENT_W - hero_w - GAP
-    pos_h = avail * 0.44
-    ti = panel(slide, rx, top, rw, pos_h, "Proposed positioning", accent=PURPLE, reserve=2.0)
-    chip(
-        slide,
-        rx + rw - chip_width("RECOMMENDATION", 11) - 0.15,
-        top + 0.1,
-        "RECOMMENDATION",
-        PURPLE_DARK,
-        PURPLE,
-        size=11,
-        line=PURPLE,
-        name="Positioning tag",
-    )
-    pos = [
-        Para(
-            _short(_unlabel(s.positioning_line), 140) or "No positioning statement recorded.",
-            22,
-            TEXT,
-            bold=True,
-            after=8,
-        )
-    ]
-    if s.recommended_offer:
-        pos.append(Para(_short(_unlabel(s.recommended_offer), 320), 15, MUTED, after=0))
-    text_box(
-        slide,
-        rx + 0.18,
-        ti,
-        rw - 0.3,
-        top + pos_h - ti - 0.08,
-        pos,
-        pad=0.03,
-        name="Positioning statement",
-    )
-    y2 = top + pos_h + GAP
-    h2 = top + avail - y2
-    half = (rw - GAP) / 2
-    assumptions = ["The price point is untested with target customers."]
-    if ctx.unverified:
-        assumptions.append(
-            "Competitor prices are unverified, so any premium or discount is unknown."
-        )
-    if s.rationale:
-        assumptions.append(_short(s.rationale, 130))
-    needs = [
-        _short(b, 120)
-        for b in spec.bullets
-        if not _AMOUNT.search(b) and not b.lower().startswith("recommend")
-    ][:3] or ["Specify serving size and delivery terms before sale."]
-    for i, (heading, accent, lines) in enumerate(
-        (("Key assumptions", BLUE, assumptions), ("Commercial validation needs", TEAL, needs))
-    ):
-        x = rx + i * (half + GAP)
-        ti = panel(slide, x, y2, half, h2, heading, accent=accent)
-        text_box(
-            slide,
-            x + 0.18,
-            ti,
-            half - 0.3,
-            y2 + h2 - ti - 0.08,
-            [Para(line, 15, TEXT, bullet=True, after=7) for line in lines],
-            pad=0.03,
-            name=f"Card {heading}",
-        )
-    price_note = f"Recommended price (full text): {s.recommended_price}"
-    _notes(slide, spec, [price_note, *assumptions, *needs])
+    # price
+    y = panel(s, xa, top, wa, top_h, "Recommended test price", accent=BURGUNDY)
+    head, plan, derived, note = _price_parts(st.recommended_price)
+    if head:
+        page.text(xa + 0.2, y, wa - 0.4, 0.7,
+                  Para(head, 38, BURGUNDY, bold=True, font=HEAD_FONT, after=0), pad=0.02,
+                  anchor=MSO_ANCHOR.MIDDLE, name="Price value")
+        y += 0.74
+        lines = [Para(plan, 13.5, INK, bold=True, after=3)] if plan else []
+        if derived:
+            lines.append(Para(derived[:1].upper() + derived[1:], 12.5, MUTED, after=3))
+        if note:
+            lines.append(Para(note[:1].upper() + note[1:], 12, MUTED, after=0))
+    else:
+        lines = [Para(st.recommended_price or "No price recommendation was recorded.", 12, INK,
+                      after=0)]
+    warn = [Para("RECOMMENDATION — NOT A VERIFIED MARKET PRICE", 10.5, GOLD, bold=True, after=0)]
+    warn_h = needed_height_in(warn, wa - 0.4, pad=0.1) + 0.04
+    wy = top + top_h - warn_h - 0.12
+    if lines:
+        page.text(xa + 0.2, y, wa - 0.4, max(0.3, wy - y - 0.06), lines, pad=0.02,
+                  name="Price detail")
+    page.text(xa + 0.2, wy, wa - 0.4, warn_h, warn, fill=GOLD_LIGHT, line=GOLD, pad=0.1,
+              anchor=MSO_ANCHOR.MIDDLE, name="Price warning")
 
+    # assumptions and unknowns
+    y = panel(s, xb, top, wb, top_h, "Assumptions & unknowns", accent=GOLD)
+    items = []
+    for c in ctx.comps:
+        if c.price.status != "verified":
+            why = _short(_plain(c.unknowns[0]), 70) if c.unknowns else "no evidence-backed price"
+            items.append(f"{c.name}: price not verified ({why})")
+    assume = [_short(t, 200) for t in _sentences(_plain(st.rationale))[:3]]
+    paras = [Para("UNVERIFIED", 10.5, GOLD, bold=True, after=2)]
+    if len(items) > 4:
+        items = [*items[:4], f"+{len(items) - 4} more competitor price(s) not verified"]
+    paras += _bullets(items or ["All competitor prices were verified."], 12)
+    paras += [Para("ASSUMPTIONS (FROM THE REPORT'S RATIONALE)", 10.5, GOLD, bold=True, after=2)]
+    paras += _bullets(assume or ["No rationale was recorded."], 12)
+    page.text(xb + 0.2, y, wb - 0.35, top + top_h - y - 0.1, paras, pad=0.02,
+              name="Assumptions and unknowns")
 
-# ----------------------------------------------------------------------------- slide 6
-def parse_weeks(bullets: list[str]) -> list[tuple[str, str]]:
-    weeks = []
-    for b in bullets:
-        m = _WEEK.match(b)
-        if m:
-            weeks.append((f"Week {int(m.group(1))}", m.group(2).strip()))
+    # next steps
+    y = panel(s, xc, top, wc, top_h, "Next steps & priorities", accent=TEAL)
+    weeks = parse_weeks(spec.bullets)
+    steps = []
     if weeks:
-        return weeks
-    return [(f"Step {i}", b) for i, b in enumerate(bullets, 1)]
+        steps.append(f"Start: {_short(weeks[0][1], 220)}")
+    if src.partial:
+        steps += [f"Close gap: {_short(r, 180)}" for r in src.acceptance_reasons[:2]]
+    else:
+        steps.append("Report passed acceptance: proceed with the roadmap below.")
+    page.text(xc + 0.2, y, wc - 0.35, top + top_h - y - 0.1, _bullets(steps, 12.5), pad=0.02,
+              name="Next steps")
 
-
-def _slide_roadmap(prs, ctx: Ctx, index: int, spec: SlideSpec) -> None:
-    slide, top = _chrome(prs, ctx, index, spec)
-    weeks = parse_weeks(spec.bullets)[:4]
+    # roadmap
+    ry = top + top_h + GAP
+    page.text(MARGIN_X, ry, CONTENT_W, 0.3,
+              Para("30-DAY ROADMAP · RECOMMENDED ACTIONS, NOT COMPLETED OR VERIFIED FACTS", 11,
+                   BURGUNDY, bold=True, after=0), pad=0.02, name="Roadmap heading")
+    cy = ry + 0.34
+    ch = top + height - cy
+    n = max(1, len(weeks))
+    cw = (CONTENT_W - GAP * (n - 1)) / n
     if not weeks:
-        text_box(
-            slide,
-            MARGIN_X,
-            top + 0.3,
-            CONTENT_W,
-            1.0,
-            Para("No launch plan actions were recorded.", 18, MUTED),
-            fill=SURFACE,
-            line=BORDER,
-            name="No plan",
-        )
-        _notes(slide, spec, [])
-        return
-    n = len(weeks)
-    ws = split_widths(CONTENT_W, n)
-    text_box(
-        slide,
-        MARGIN_X,
-        top,
-        CONTENT_W,
-        0.38,
-        Para(
-            "PROPOSED FUTURE ACTIONS — NOT COMPLETED OR VERIFIED",
-            13,
-            AMBER,
-            bold=True,
-            align=PP_ALIGN.CENTER,
-            after=0,
-        ),
-        fill=AMBER_DARK,
-        line=AMBER,
-        anchor=MSO_ANCHOR.MIDDLE,
-        pad=0.1,
-        name="Plan status",
-    )
-    line_y = top + 0.38 + GAP + 0.32
-    centers: list[float] = []
-    x = MARGIN_X
-    for w in ws:
-        centers.append(x + w / 2)
-        x += w + GAP
-    for i in range(n - 1):
-        arrow(
-            slide,
-            centers[i] + 0.35,
-            line_y,
-            centers[i + 1] - 0.35,
-            line_y,
-            TEAL,
-            width_pt=3.0,
-            name=f"Timeline link {i + 1}",
-        )
-    for c, (label, _) in zip(centers, weeks, strict=True):
-        glyph = label.replace("Week ", "W").replace("Step ", "S")
-        badge(
-            slide, c - 0.3, line_y - 0.3, 0.6, glyph, TEAL, NAVY, size=15, name=f"Milestone {label}"
-        )
-    cards_top = line_y + 0.45
-    card_h = CONTENT_BOTTOM - cards_top
-    x = MARGIN_X
-    detail: list[str] = []
-    for (label, body), w in zip(weeks, ws, strict=True):
-        clauses = [c.strip(" .") for c in re.split(r";\s*", body) if c.strip(" .")]
-        heading = clauses[0] if len(clauses) > 1 else _short(body, 70)
-        items = clauses[1:] if len(clauses) > 1 else [body.strip(" .")]
-        detail.append(f"{label}: {body}")
-        ti = panel(
-            slide,
-            x,
-            cards_top,
-            w,
-            card_h,
-            label,
-            accent=TEAL,
-            reserve=chip_width("PROPOSED", 10) + 0.2,
-        )
-        chip(
-            slide,
-            x + w - chip_width("PROPOSED", 10) - 0.12,
-            cards_top + 0.08,
-            "PROPOSED",
-            AMBER_DARK,
-            AMBER,
-            size=10,
-            h=0.31,
-            line=AMBER,
-            name=f"{label} tag",
-        )
-        hh = min(1.5, max(0.6, needed_height_in([Para(heading, 17, TEXT, bold=True)], w - 0.3)))
-        text_box(
-            slide,
-            x + 0.18,
-            ti,
-            w - 0.3,
-            hh,
-            Para(heading, 17, TEXT, bold=True, after=0),
-            pad=0.03,
-            name=f"{label} focus",
-        )
-        text_box(
-            slide,
-            x + 0.18,
-            ti + hh + 0.02,
-            w - 0.3,
-            cards_top + card_h - (ti + hh) - 0.1,
-            [
-                Para("PLANNED OUTPUTS", 11, MUTED, bold=True, after=4),
-                *[Para(i, 15, TEXT, bullet=True, after=7) for i in items],
-            ],
-            pad=0.03,
-            name=f"{label} actions",
-        )
-        x += w + GAP
-    _notes(slide, spec, detail)
+        page.text(MARGIN_X, cy, CONTENT_W, 0.5, Para("No launch plan steps were recorded.", 12,
+                                                    MUTED, after=0), pad=0.02, name="No plan")
+    for i, (label, body) in enumerate(weeks):
+        x = MARGIN_X + i * (cw + GAP)
+        box(s, x, cy, cw, ch, fill=PAPER, line=BORDER, name=f"Milestone {i + 1}")
+        box(s, x, cy, cw, 0.07, fill=TEAL if i % 2 == 0 else BLUE, round_=False, name="Accent")
+        chip(s, x + 0.15, cy + 0.16, label.upper(), TEAL_LIGHT, TEAL, size=10.5, h=0.32,
+             name=f"Milestone tag {i + 1}", line=TEAL)
+        page.text(x + 0.15, cy + 0.56, cw - 0.3, ch - 0.64, Para(body, 12, INK, after=0),
+                  pad=0.02, name=f"Milestone text {i + 1}")
+        if i < n - 1:
+            arrow(s, x + cw, cy + ch / 2, x + cw + GAP, cy + ch / 2, TEAL, width_pt=2,
+                  name=f"Timeline link {i + 1}")
+    notes.append(f"Roadmap weeks: {len(weeks)}")
+    page.finish(notes)
 
 
 # ----------------------------------------------------------------------------- entry points
 _LAYOUTS = (
-    _slide_dashboard,
-    _slide_matrix,
-    _slide_evidence,
-    _slide_flow,
-    _slide_pricing,
-    _slide_roadmap,
+    _slide_problem,
+    _slide_market,
+    _slide_customers,
+    _slide_solution,
+    _slide_gtm,
+    _slide_financials,
 )
 
 
@@ -1184,7 +886,7 @@ def build_pptx(deck: DeckSpec, source: DeckSource, path: Path, generated_on: dat
     prs.slide_width, prs.slide_height = Emu(int(Inches(SLIDE_W))), Emu(int(Inches(SLIDE_H)))
     ctx = Ctx(deck, source, generated_on)
     for index, (layout, slide_spec) in enumerate(zip(_LAYOUTS, deck.slides, strict=True), 1):
-        layout(prs, ctx, index, slide_spec)
+        layout(Page(prs, ctx, index, slide_spec))
     prs.core_properties.title = f"LaunchScout pitch deck: {source.input.idea}"
     prs.core_properties.author = "LaunchScout"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1201,10 +903,12 @@ def _frame_needed_pt(shape) -> float:
     total = 0.0
     for para in frame.paragraphs:
         size = max((r.font.size.pt for r in para.runs if r.font.size), default=14.0)
+        serif = any(r.font.name == HEAD_FONT for r in para.runs)
+        eff = size * (SERIF_EM_FACTOR if serif else 1.0)
         ppr = para._p.pPr
         bulleted = ppr is not None and ppr.find(f"{_A_NS}buChar") is not None
         content = "".join(r.text for r in para.runs)
-        lines = estimate_lines(content, width_pt - (16 if bulleted else 0), size)
+        lines = estimate_lines(content, width_pt - (16 if bulleted else 0), eff)
         after = para.space_after.pt if para.space_after is not None else 0
         total += lines * size * LINE_SPACING + after
     return total + (frame.margin_top + frame.margin_bottom) / 12700
@@ -1260,7 +964,7 @@ def layout_utilization(path: Path) -> list[float]:
     covered by shapes, per slide. A coarse grid estimate of space use."""
     prs = Presentation(str(path))
     out: list[float] = []
-    band_top, band_bottom = 1.3, FOOTER_TOP
+    band_top, band_bottom = _HEADER_BOTTOM + 0.1, FOOTER_TOP
     cols, rows = 96, 48
     for slide in prs.slides:
         grid = [[False] * cols for _ in range(rows)]

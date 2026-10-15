@@ -328,6 +328,8 @@ def _kickoff(slides=None):
 
 
 def test_generate_uses_one_agent_call_and_exports_editable_pptx(tmp_path, source):
+    from launchscout.exports.pptx_builder import SLIDE_NAMES
+
     kick = _kickoff()
     result = deck.generate_deck(source, kickoff=kick)
     assert len(kick.calls) == 1 and result.violations == []
@@ -339,8 +341,10 @@ def test_generate_uses_one_agent_call_and_exports_editable_pptx(tmp_path, source
         pictures = [shape for shape in slide.shapes if shape.shape_type == 13]
         assert [p.name for p in pictures] == ["LS logo"]  # the logo is the only picture
         names = {s.name for s in slide.shapes}
-        assert {"Title", "Labels", "Footer", "Evidence status"} <= names
-        assert next(s for s in slide.shapes if s.name == "Title").text_frame.text == title
+        assert {"Title", "Subtitle", "Labels", "Footer", "Evidence status"} <= names
+        shown = next(s for s in slide.shapes if s.name == "Title").text_frame.text
+        assert shown in SLIDE_NAMES  # the V3 slide name; the validated deck title is the subtitle
+        assert title in next(s for s in slide.shapes if s.name == "Subtitle").text_frame.text
         assert slide.notes_slide.notes_text_frame.text is not None
     matrix = " ".join(s.text_frame.text for s in prs.slides[1].shapes if s.has_text_frame)
     assert "Alpha Juice" in matrix and "Beta Press" in matrix
@@ -539,7 +543,7 @@ def test_text_bounds_check_passes_normal_deck_and_flags_overflow(tmp_path, sourc
     assert check_text_bounds(ok) == []
 
     prs = Presentation(str(ok))
-    victim = next(sh for sh in prs.slides[0].shapes if sh.name == "KPI caption")
+    victim = next(sh for sh in prs.slides[0].shapes if sh.name == "Business idea")
     victim.height = 20000  # far too small for its text
     broken = tmp_path / "broken.pptx"
     prs.save(str(broken))
@@ -573,7 +577,10 @@ def test_multiline_warning_banner_grows_to_contain_its_text(tmp_path, source):
     for slide in prs.slides:
         banner = next(s for s in slide.shapes if s.name == "Labels")
         assert banner.height > Inches(0.6)  # wrapped to several lines, not a one-line strip
-        chrome = {"LS logo tile", "LS logo", "Kicker", "Title", "Evidence status", "Labels"}
+        chrome = {
+            "LS logo tile", "LS logo", "Brand block", "Brand name", "Brand tagline",
+            "Slide index", "Title", "Subtitle", "Header rule", "Evidence status", "Labels",
+        }
         footer = ("Footer", "Footer rule", "Slide number")
         below = [s for s in slide.shapes if s.name not in chrome and s.name not in footer]
         assert all(s.top >= banner.top + banner.height for s in below)  # content under banner
@@ -637,7 +644,9 @@ def test_every_slide_has_logo_status_footer_and_native_shapes(tmp_path, source):
         names = [s.name for s in slide.shapes]
         assert names.count("LS logo") == 1 and "LS logo tile" in names
         assert sum(1 for s in slide.shapes if s.shape_type == 13) == 1
-        assert _shape(slide, "Slide number").text_frame.text == f"{number} / 6"
+        assert _shape(slide, "Slide number").text_frame.text == f"{number:02d} / 06"
+        assert _shape(slide, "Brand tagline").text_frame.text == "Competitor Research Crew"
+        assert _shape(slide, "Brand name").text_frame.text == "LaunchScout"
         assert "PARTIAL EVIDENCE" in _shape(slide, "Evidence status").text_frame.text
         assert "PARTIAL EVIDENCE" in _shape(slide, "Labels").text_frame.text
         assert slide.has_notes_slide and slide.notes_slide.notes_text_frame.text.strip()
@@ -647,17 +656,23 @@ def test_every_slide_has_logo_status_footer_and_native_shapes(tmp_path, source):
 def test_visual_components_present_and_editable(tmp_path, source):
     _, prs = _build(tmp_path, source)
     s1, s2, s3, s4, s5, s6 = prs.slides
-    assert sum(1 for s in s1.shapes if s.name == "KPI tile") == 4
-    charts = [s for s in s1.shapes if getattr(s, "has_chart", False) and s.has_chart]
-    assert len(charts) == 1  # native, editable chart
-    assert any(s.name.startswith("Pricing: ") for s in s2.shapes)
-    assert any(s.name.startswith("Offer: ") for s in s3.shapes)  # evidence coverage grid
-    assert sum(1 for s in s4.shapes if s.name.startswith("Flow arrow")) == 3
-    assert {"Stage 1", "Stage 2", "Stage 3", "Stage 4"} <= {s.name for s in s4.shapes}
-    warning = _shape(s5, "Price warning").text_frame.text
+    names1 = [s.name for s in s1.shapes]
+    assert {"Node 1", "Node 2", "Node 3"} <= set(names1)
+    assert sum(1 for n in names1 if n.startswith("Flow arrow")) == 2
+    assert sum(1 for n in names1 if n.startswith("Gauge: ") and n.endswith(" fill")) >= 1
+    assert sum(1 for s in s2.shapes if s.name.startswith("Competitor: ")) == 2
+    assert sum(1 for s in s2.shapes if s.name.startswith("Price: ")) == 2  # status chips
+    assert any(s.name.startswith("Coverage: ") for s in s2.shapes)
+    assert any(s.name.startswith("Insight card") for s in s3.shapes)
+    assert {"Value proposition", "Positioning tag"} <= {s.name for s in s4.shapes}
+    assert sum(1 for s in s4.shapes if s.name.startswith("Status card")) == 3
+    assert any(s.name.startswith("Phase badge") for s in s5.shapes)
+    warning = _shape(s6, "Price warning").text_frame.text
     assert warning == "RECOMMENDATION — NOT A VERIFIED MARKET PRICE"
-    assert _shape(s5, "Price value").text_frame.text == "₹99"
-    milestones = sum(1 for s in s6.shapes if s.name.startswith("Milestone"))
+    assert _shape(s6, "Price value").text_frame.text == "₹99"
+    milestones = sum(
+        1 for s in s6.shapes if s.name.startswith("Milestone ") and s.name[10:].isdigit()
+    )
     assert milestones == 2  # the fixture plan has two weeks; cards follow the data
     assert sum(1 for s in s6.shapes if s.name.startswith("Timeline link")) == milestones - 1
     for slide in prs.slides:
@@ -749,7 +764,7 @@ def _chips(prs):
 def test_status_badges_never_wrap_and_hold_their_full_label(tmp_path, source):
     _, prs = _build(tmp_path, source)
     seen = {name for _, shape in _chips(prs) for name in [shape.name]}
-    assert "Positioning tag" in seen and any(n.startswith("Stage 4 tag") for n in seen)
+    assert "Positioning tag" in seen and any(n.startswith("Milestone tag") for n in seen)
     for number, shape in _chips(prs):
         frame = shape.text_frame
         label = frame.text
@@ -780,12 +795,56 @@ def test_very_long_badge_label_gets_a_wider_chip_instead_of_wrapping():
     from pptx import Presentation as P
     from pptx.util import Inches
 
-    from launchscout.exports.pptx_components import PURPLE, PURPLE_DARK, chip, chip_width
+    from launchscout.exports.pptx_components import BURGUNDY, BURGUNDY_LIGHT, chip, chip_width
 
     prs = P()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     short, long = "RECOMMENDATION", "RECOMMENDATION — PROPOSED, NOT VERIFIED"
     assert chip_width(long, 11) > chip_width(short, 11) * 2
-    shape, width = chip(slide, 1, 1, long, PURPLE_DARK, PURPLE, size=11, name="long")
+    shape, width = chip(slide, 1, 1, long, BURGUNDY_LIGHT, BURGUNDY, size=11, name="long")
     assert shape.text_frame.word_wrap is False
     assert shape.width == Inches(width) or abs(shape.width - Inches(width)) < 5
+
+
+# ---------------------------------------------------------------- V3 investor deck
+def test_v3_every_validated_bullet_is_preserved_in_the_notes(tmp_path, source):
+    spec = deck.apply_labels(_spec(), source)
+    _, prs = _build(tmp_path, source)
+    for slide, slide_spec in zip(prs.slides, spec.slides, strict=True):
+        notes = slide.notes_slide.notes_text_frame.text
+        assert all(b in notes for b in slide_spec.bullets)
+        assert all(label in notes for label in slide_spec.labels)
+
+
+def test_v3_unverified_prices_are_labelled_and_recommendations_are_not_prices(tmp_path, source):
+    _, prs = _build(tmp_path, source)
+    chips = [s.text_frame.text for s in prs.slides[1].shapes if s.name.startswith("Price: ")]
+    assert "PRICE UNKNOWN" in chips  # an unverified price is never shown as a figure
+    assert len(chips) == 2 and sum(1 for c in chips if c.startswith("₹")) == 1
+    s6 = prs.slides[5]
+    assert _shape(s6, "Price warning").text_frame.text.startswith("RECOMMENDATION")
+    assert "PRICE UNKNOWN" not in " ".join(
+        s.text_frame.text for s in s6.shapes if s.has_text_frame
+    )
+
+
+def test_v3_header_footer_and_sources_strip_on_every_slide(tmp_path, source):
+    _, prs = _build(tmp_path, source)
+    names = (
+        "Problem & Opportunity", "Market Landscape", "Customer Insights",
+        "Solution & Differentiation", "Go-to-Market Strategy", "Financials & Roadmap",
+    )
+    for number, (slide, name) in enumerate(zip(prs.slides, names, strict=True), 1):
+        assert _shape(slide, "Slide index").text_frame.text == f"{number:02d}"
+        assert _shape(slide, "Title").text_frame.text == name
+        footer = _shape(slide, "Footer").text_frame.text
+        assert footer.startswith("LaunchScout | " + name) and "Partial evidence" in footer
+        assert _shape(slide, "Sources").text_frame.text.startswith("Sources:")
+
+
+def test_v3_compact_rows_for_many_competitors_keep_status_chips(tmp_path, source):
+    from launchscout.exports.pptx_builder import check_text_bounds
+
+    path, prs = _build(tmp_path, _more_competitors(source, 7), name="many.pptx")
+    assert sum(1 for s in prs.slides[1].shapes if s.name.startswith("Price: ")) == 7
+    assert check_text_bounds(path) == []
