@@ -465,3 +465,9 @@ None.
 
 ### M8 public-repository cleanup (15 Oct 2026)
 - Removed unused template files (`skills/`, `agents/`, `.claude/commands/setup-project.md`) after confirming no code, test or doc link depended on them; replaced local absolute paths in three documents with placeholders. History not rewritten; template attribution preserved.
+
+### M8 demo-data privacy cleanup (15 Oct 2026)
+- Scope: `evidence.json` of the two bundled runs (the only artifacts containing contact details; PDFs, PPTX, Markdown reports and other JSON were scanned and contained none). Offline text redaction only; no research, model, search or scrape call.
+- Redacted 3 email addresses and 10 phone/WhatsApp numbers (including one truncated number) as `[email removed]` / `[phone removed]` inside excerpt text. URLs, titles, findings, prices, validation, metrics and file format are unchanged (9 JSON lines changed across 2 files).
+- Verification: Ruff clean; 341 tests pass; Docker demo image rebuilt and re-checked (health, three tabs, replay, tracking, saved deck); strict scan of all tracked and demo files finds no email addresses or phone numbers outside URLs.
+- Earlier public commit `6d82caa` still contains the unredacted text; history was not rewritten.
