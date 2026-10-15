@@ -75,3 +75,18 @@ Not marked complete. Live runs L1-L4 (see `BUILD_LOG.md`) exercised the sequenti
 | TR-03 | Price change only when comparable and evidence-backed | `::test_verified_price_change_needs_comparable_evidence_backed_amounts`, `::test_incomparable_prices_are_insufficient_evidence_not_a_change`, `::test_verification_gained_or_lost_is_not_a_price_change` | Pass |
 | TR-04 | Offering, subscription, channel, evidence changes; partial runs; empty data | `::test_offering_subscription_and_channel_changes`, `::test_evidence_availability_changes_are_inconclusive_coverage_notes`, `::test_partial_runs_are_compared_with_honest_limitations`, `::test_empty_and_incomplete_data_are_reported_not_guessed` | Pass |
 | TR-05 | Deterministic Markdown export; zero model/search calls; UI empty state | `::test_markdown_export_is_deterministic_and_evidence_referenced`, `::test_tracking_module_has_no_model_or_network_dependencies`, `::test_ui_*` | Pass |
+
+## M8 Public demo mode and deployment package - local status (15 Oct 2026)
+
+Deployment to the VPS is **not executed**; rows below cover what was verified locally.
+
+| Req | Requirement | Implementation | Test / check evidence | Status |
+|---|---|---|---|---|
+| D-01 | Public demo cannot start paid work (run, model, search, scrape, crew, deck, model check) | `launchscout/demo.py::require_live` at each execution boundary | `tests/test_demo_mode.py::test_run_manager_refuses_to_start_a_run_in_demo`, `::test_model_search_scrape_crew_deck_and_model_check_are_blocked`, UI submit tests | Pass |
+| D-02 | Fails closed: only explicit `LAUNCHSCOUT_MODE=live` enables live | `launchscout/demo.py::configured_mode` | `::test_mode_fails_closed_and_live_needs_an_explicit_setting`, `::test_live_can_come_from_a_local_env_file_but_the_environment_wins` | Pass |
+| D-03 | Demo data holds no secrets or paths; expected files only | `demo_data/saved_runs` (L5, L6) | `tests/test_demo_mode.py` (file-set, offender and secret scans); key values from local `.env` searched in tracked and demo files: none found | Pass |
+| D-04 | Image has no credentials; non-root; read-only rootfs; caps dropped | `Dockerfile`, `docker-compose.yml`, `.dockerignore` | `docker inspect`: ReadonlyRootfs=true, CapDrop=[ALL], no-new-privileges, user app; in-container: no `.env`, no `secrets.toml`, no API key variables, writes to `/app` and demo data blocked | Pass (local) |
+| D-05 | Container serves the app: health, three tabs, saved runs, replay, tracking | Docker image | health 200 via `/_stcore/health`; in-container Streamlit AppTest: no exception, 3 tabs, demo banner, run button disabled, newest run selected, replay step, tracking comparison eligible, tracking Markdown export 7024 chars, saved deck loads | Pass (local) |
+| D-06 | Browser-level downloads in the container | `ui/*` `st.download_button` (reads saved files) | Files verified present and readable; button clicks not exercised (AppTest cannot click downloads) | Partial |
+| D-07 | Publish behind existing Traefik, no public 8501 | `deploy/docker-compose.traefik.yml`, `docs/DEPLOYMENT.md` | `compose config` fails without the four required variables; renders with no `ports:` | Prepared, not deployed |
+| D-08 | Verify Traefik network, entrypoint, resolver names on the VPS | `docs/DEPLOYMENT.md` step 2 | not executed (no VPS access in this session) | Not started |

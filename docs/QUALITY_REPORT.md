@@ -103,3 +103,29 @@ Pure comparison of saved snapshots; findings describe research output, not the m
 
 ### M7 classification correction
 Wording differences between research runs are never counted as changed competitors: the "Changed" KPI requires a verified price change on comparable evidence. Regression tests cover synthetic wording noise, wording noise next to a genuine price change, the UI KPI, and the real L5 vs L6 pair (0 changed, 2 needs review). This corrects the earlier statement that L5/L6 showed two changed competitors.
+
+## M8 Final QA and demo packaging (15 Oct 2026, local; nothing deployed)
+
+| Check | Result |
+|---|---|
+| Ruff (`ruff check .`) | All checks passed |
+| pytest, full suite | 341 passed, 0 failed (baseline at M7: 329; +11 demo-mode tests; +1 fail-closed `.env` test) |
+| Paid API calls / live research in this milestone | none |
+| Docker build (`docker compose build`) | Built; image size 427,963,480 bytes (about 428 MB, per `docker image inspect`) |
+| Container health | `healthy`; `/_stcore/health` 200; `/` 200; logo static route 200 |
+| Container hardening | uid 10001, ReadonlyRootfs=true, CapDrop=ALL, no-new-privileges; `.env`, `secrets.toml`, `runs/`, `data/` absent; no API key variables (only the base image's public `GPG_KEY`) |
+| Read-only filesystem | app starts and runs; writes to `/app`, saved runs and `/etc` are refused; `/tmp` writable. Tracking export and saved deck load work. |
+| In-container UI run (Streamlit AppTest) | no exception; tabs Research Workspace / Pitch Deck / Weekly Tracking; demo banner; run button disabled; L6 selected by default; replay step OK; L5 vs L6 tracking eligible |
+| Demo guards | blocked at `RunManager.start`, `build_llm`, `run_crew`, `generate_deck`, default search, default scrape and `model_check.main` (tests) |
+| Secrets scan | no key values from the local `.env` found in tracked or demo files; secret patterns appear only as obvious `sk-test-...` fixtures in 2 test files |
+| Traefik compose | missing variable => Compose error (fails closed); rendered with placeholders: no `ports:`, router rule, tls, resolver and service port 8501 present |
+
+### Not verified
+- Browser-level clicking of download buttons and a real-browser view (only the AppTest and HTTP checks above).
+- Everything on the VPS: Traefik names, DNS, certificate issuance, public reachability, firewall.
+- LibreOffice/PowerPoint rendering of the demo deck (unchanged from M6 note).
+
+### Public-repository cleanup before first publication
+- Removed MicroSaaS-template material LaunchScout does not use: `skills/`, `agents/`, `.claude/commands/setup-project.md`; the one reference to `skills/TESTING.md` in `.claude/commands/generate-prp.md` was dropped. No application or test code referenced them.
+- Local absolute paths in `INITIAL.md`, `PRPs/launchscout-prp.md` and `docs/BUILD_LOG.md` replaced with generic placeholders.
+- Git history is preserved unchanged, including the template's original first commit and its author attribution.

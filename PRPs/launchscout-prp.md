@@ -13,7 +13,7 @@
 | Source definition | `INITIAL.md` (sections 3–7 used as transcription of the assignment) |
 | PRP version | 1.2 (v1.1 + M2 progress statuses and UI palette/layout record; M2-only authorization) |
 | Generated | 14 October 2026 (IST); clock time not recorded here |
-| Working dir | `D:\agentic-coding-labs\launch_scout_research_crew` |
+| Working dir | `<project-root>` |
 | Complexity | Medium (many small modules; external APIs are the main risk) |
 | Status | **Architecture and M1–M8 structure approved. Implementation authorization pending (section 14).** |
 

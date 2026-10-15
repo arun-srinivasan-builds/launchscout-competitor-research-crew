@@ -14,7 +14,7 @@ Read the product definition: $ARGUMENTS (defaults to `INITIAL.md`).
 6. This command adapts the template workflow to the assignment's stack. It never changes the assignment.
 
 ## Context files to read first
-- `CLAUDE.md`, `INITIAL.md`, `skills/TESTING.md`
+- `CLAUDE.md`, `INITIAL.md`
 - `docs/*.md` if present
 - Reuse only the general practices from the template: type hints, `logging` not `print`, secrets via env vars, ruff + pytest, mocked external services, success + error test cases. Ignore every template instruction that names a different stack.
 

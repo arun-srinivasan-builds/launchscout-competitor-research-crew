@@ -1,0 +1,49 @@
+# LaunchScout PUBLIC DEMO behind an EXISTING Traefik. Demo mode only: no API keys are read.
+#
+# Nothing here is assumed about the VPS. Supply the real values from `docker inspect` of your
+# running Traefik (see docs/DEPLOYMENT.md, "Discover the Traefik settings") in an env file:
+#   TRAEFIK_NETWORK        name of the existing Docker network Traefik is attached to
+#   TRAEFIK_ENTRYPOINT     name of Traefik's HTTPS entrypoint
+#   TRAEFIK_CERT_RESOLVER  name of Traefik's ACME certificate resolver
+#   LAUNCHSCOUT_HOST       launchscout.arunsrinivasan.io
+# Compose refuses to start if any is missing (no defaults on purpose).
+services:
+  launchscout:
+    image: launchscout-demo:${LAUNCHSCOUT_TAG:-latest}
+    build:
+      context: ..
+    container_name: launchscout-demo
+    environment:
+      LAUNCHSCOUT_MODE: demo
+      LAUNCHSCOUT_RUNS_DIR: /app/demo_data/saved_runs
+    # No `ports:`: 8501 is reachable only on the Traefik network, never published on the host.
+    expose:
+      - "8501"
+    networks:
+      - traefik
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/app:uid=10001,gid=10001
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: "${TRAEFIK_NETWORK:?set TRAEFIK_NETWORK}"
+      traefik.http.routers.launchscout.rule: "Host(`${LAUNCHSCOUT_HOST:?set LAUNCHSCOUT_HOST}`)"
+      traefik.http.routers.launchscout.entrypoints: "${TRAEFIK_ENTRYPOINT:?set TRAEFIK_ENTRYPOINT}"
+      traefik.http.routers.launchscout.tls: "true"
+      traefik.http.routers.launchscout.tls.certresolver: "${TRAEFIK_CERT_RESOLVER:?set TRAEFIK_CERT_RESOLVER}"
+      traefik.http.services.launchscout.loadbalancer.server.port: "8501"
+
+networks:
+  traefik:
+    external: true
+    name: "${TRAEFIK_NETWORK:?set TRAEFIK_NETWORK}"

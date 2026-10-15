@@ -1,0 +1,29 @@
+# Public demo: saved research only. No API keys are read or required by this service.
+services:
+  launchscout:
+    build: .
+    image: launchscout-demo:latest
+    container_name: launchscout-demo
+    environment:
+      LAUNCHSCOUT_MODE: demo
+      LAUNCHSCOUT_RUNS_DIR: /app/demo_data/saved_runs
+    # Bound to localhost; put a TLS reverse proxy (Caddy/Nginx) in front for public access.
+    ports:
+      - "127.0.0.1:8501:8501"
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/app:uid=10001,gid=10001
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    # Demo data is baked into the image (read-only), so no volume is required. To publish a
+    # different curated set without rebuilding, mount a directory of saved runs read-only:
+    # volumes:
+    #   - ./demo_data/saved_runs:/app/demo_data/saved_runs:ro

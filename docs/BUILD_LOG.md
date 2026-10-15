@@ -449,3 +449,19 @@ None.
 ### M7 classification correction
 - Text differences in research descriptions (offering, subscription, channels) and evidence coverage are now "Needs review" with the label "Research description differs — real-world change not verified"; both original descriptions stay visible. Only a verified, comparable, evidence-backed price difference counts as "Changed". New / not-observed classifications, scope checks, evidence rules and the Markdown export are unchanged.
 - Saved L5 vs L6 (offline): eligible; KPIs: newly observed 0, not observed 0, changed 0, needs review 2 (both competitors), unchanged 0. Tests: 329 pass, Ruff clean.
+
+## M8 Final QA, public demo mode and deployment preparation (uncommitted; baseline 39bab14)
+- Date: 15 Oct 2026. Wall-clock start/end times were not recorded, so no elapsed time is stated. The only timestamp available is the container's own log clock (2026-10-15 03:12 UTC) during the in-container check.
+- Scope: validation, hardening, packaging and documentation only. No product feature, no research run, no model/search/scrape call, no commit, no push, no VPS deployment.
+- Reviewed the existing uncommitted M8 draft (demo mode, Dockerfile, compose, demo data). Kept it; changes below are additive.
+- **Demo mode now fails closed.** `launchscout/demo.py`: `is_demo()` is true unless `LAUNCHSCOUT_MODE` is exactly `live` (case/space-insensitive). Unset, empty, `demo` or any other value is demo. The process environment wins over a local `.env`. `tests/conftest.py` sets `live` so the existing suite keeps injecting fakes. A local developer must now add `LAUNCHSCOUT_MODE=live` to `.env` to run live research.
+- `.dockerignore` hardened: `.streamlit/secrets*`, `secrets`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.crt`, `id_rsa*`, `id_ed25519*`, `credentials*`, `*.log`, compose files and `deploy/`.
+- `.env.example` documents the fail-closed setting.
+- New `deploy/docker-compose.traefik.yml`: no published port, external Traefik network, labels for `Host(...)`, entrypoint and certificate resolver. All four values are required variables with no defaults, so Compose refuses to render without them. The real names are not known yet and must be read from the VPS Traefik (docs/DEPLOYMENT.md step 2).
+- New `docs/DEPLOYMENT.md`; README replaced (MicroSaaS template text removed).
+- Git: `origin` changed locally from the template repository to `arun-srinivasan-builds/launchscout-competitor-research-crew` (verified public and empty beforehand). Nothing pushed.
+- Validation: Ruff clean; pytest 341 passed (329 at M7 + 11 demo-mode tests + 1 added for fail-closed `.env` handling). Docker image built; container healthy; checks listed in QUALITY_REPORT.
+- Environment note: host port 8501 was already held by another local container (not touched), so the local run used 127.0.0.1:18501 through a temporary override kept outside the repository.
+
+### M8 public-repository cleanup (15 Oct 2026)
+- Removed unused template files (`skills/`, `agents/`, `.claude/commands/setup-project.md`) after confirming no code, test or doc link depended on them; replaced local absolute paths in three documents with placeholders. History not rewritten; template attribution preserved.

@@ -3,7 +3,7 @@
 ## 1. Product identity
 - **Project:** LaunchScout — Competitor Research Crew
 - **Assignment:** Social Eagle AI Academy, Track 02 — AI Agents / CrewAI, sections 2.1–2.8, including **all three stretch goals**.
-- **Working directory:** `D:\agentic-coding-labs\launch_scout_research_crew`
+- **Working directory:** `<project-root>`
 - **Build method:** Agentic coding with Claude Code. **Runtime orchestration must use CrewAI**, not Claude Code agents masquerading as application agents.
 - **Target:** A working, professional, Streamlit-based research application that takes a new business idea and delivers a sourced, founder-friendly competitor analysis, market gap, positioning, 30-day launch plan, and optional six-slide pitch deck.
 - **Scope:** A learning assignment, not a production SaaS. Avoid unnecessary authentication, billing, databases, or unrelated features.
