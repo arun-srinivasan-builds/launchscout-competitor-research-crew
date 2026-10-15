@@ -15,7 +15,7 @@ from launchscout import deck as deck_mod
 from launchscout.demo import DemoModeError, is_demo
 from launchscout.runner import RunManager, get_manager
 from launchscout.saved_runs import LABEL_TEXT, SavedRunSummary, list_saved_runs
-from ui.theme import pill, section
+from ui.theme import DEMO_DECK_NOTE, demo_note, pill, section
 
 PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 
@@ -145,7 +145,7 @@ def render() -> None:
     )
     demo = is_demo()
     if demo:
-        st.caption("Public demo: deck generation is disabled. Download the existing deck below.")
+        demo_note(DEMO_DECK_NOTE)
     if st.button("Generate pitch deck", key="deck_generate", disabled=demo):
         _generate(manager, run_id)
     _render_stored(manager, run_id)

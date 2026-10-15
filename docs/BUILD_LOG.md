@@ -471,3 +471,7 @@ None.
 - Redacted 3 email addresses and 10 phone/WhatsApp numbers (including one truncated number) as `[email removed]` / `[phone removed]` inside excerpt text. URLs, titles, findings, prices, validation, metrics and file format are unchanged (9 JSON lines changed across 2 files).
 - Verification: Ruff clean; 341 tests pass; Docker demo image rebuilt and re-checked (health, three tabs, replay, tracking, saved deck); strict scan of all tracked and demo files finds no email addresses or phone numbers outside URLs.
 - Earlier public commit `6d82caa` still contains the unredacted text; history was not rewritten.
+
+### M8 public-demo messaging refinement (15 Oct 2026, not yet pushed)
+- UI only (`app.py`, `ui/theme.py`, `ui/research_tab.py`, `ui/deck_tab.py`); shown only when `LAUNCHSCOUT_MODE` resolves to demo. Header DEMO MODE indicator, rose announcement banner, blue Research Workspace guidance and compact notices under the disabled Run Research / Generate pitch deck buttons replace the previous `st.info` and captions. No agent, evidence, report, deck, tracking, Docker or deployment change; no API call.
+- Checks: Ruff clean; 343 tests pass (2 new: demo notices present, live mode shows none); headless Edge via CDP at 1480, 1280, 820 and 390 px: no horizontal overflow (document scroll width equals client width), notices visible; Docker image rebuilt and healthy.

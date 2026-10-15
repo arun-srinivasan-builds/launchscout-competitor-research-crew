@@ -442,6 +442,55 @@ div[data-testid="stExpander"] {
   button[role="tab"] p { font-size: 1rem; }
   .ls-canvas { padding: .8rem .6rem .5rem .6rem; }
 }
+/* Demo-mode notices (rendered only in demo mode) */
+:root { --ls-rose: #FB7185; --ls-rose-bg: rgba(127, 29, 29, 0.38); --ls-rose-line: #BE3455; }
+.ls-demo-badge {
+  flex: none; margin-left: auto; display: flex; align-items: center; gap: .65rem;
+  padding: .55rem .9rem; border: 1px solid var(--ls-steel); border-radius: 12px;
+  background: rgba(12, 24, 48, 0.85); box-shadow: 0 0 14px rgba(56, 189, 248, 0.12);
+}
+.ls-demo-badge svg { flex: none; width: 1.7rem; height: 1.7rem; color: var(--ls-amber); }
+.ls-demo-badge-title { font-weight: 800; letter-spacing: .06em; color: var(--ls-amber); font-size: 1rem; }
+.ls-demo-badge-line { font-size: .85rem; color: var(--ls-text); line-height: 1.35; }
+.ls-demo-banner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .9rem 1.4rem; box-sizing: border-box;
+  padding: .85rem 1.1rem; margin: 0 0 1rem 0; border-radius: var(--ls-radius);
+  border: 1px solid var(--ls-rose-line); background: var(--ls-rose-bg);
+}
+.ls-demo-banner-main { display: flex; align-items: center; gap: .9rem; flex: 1 1 22rem; min-width: 0; }
+.ls-demo-banner-main svg { flex: none; width: 2.4rem; height: 2.4rem; color: var(--ls-rose); }
+.ls-demo-banner-title { font-size: 1.15rem; font-weight: 800; color: #FFB4BF; line-height: 1.3; }
+.ls-demo-banner-text { font-size: .98rem; color: var(--ls-text); margin-top: .15rem; line-height: 1.4; }
+.ls-demo-chips { display: flex; flex-wrap: wrap; gap: .6rem 1.1rem; flex: 0 1 auto; }
+.ls-demo-chip { display: flex; align-items: center; gap: .5rem; font-size: .9rem; color: var(--ls-text); }
+.ls-demo-chip svg { flex: none; width: 1.4rem; height: 1.4rem; color: var(--ls-rose); }
+.ls-demo-chip.ok svg { color: var(--ls-teal); }
+.ls-demo-guide {
+  display: flex; align-items: center; gap: .9rem; box-sizing: border-box;
+  padding: .8rem 1.1rem; margin: .25rem 0 1rem 0; border-radius: var(--ls-radius);
+  border: 1px solid var(--ls-steel);
+  background: linear-gradient(90deg, rgba(14, 58, 112, 0.75), rgba(12, 24, 48, 0.9));
+}
+.ls-demo-guide svg { flex: none; width: 2rem; height: 2rem; color: var(--ls-blue); }
+.ls-demo-guide-title { font-size: 1.2rem; font-weight: 800; color: var(--ls-text); line-height: 1.3; }
+.ls-demo-guide-text { font-size: .98rem; color: #CFE0F5; margin-top: .1rem; line-height: 1.4; }
+.ls-demo-note {
+  display: flex; align-items: center; gap: .65rem; box-sizing: border-box;
+  padding: .6rem .8rem; margin: .5rem 0 .75rem 0; border-radius: 10px;
+  border: 1px solid var(--ls-rose-line); background: var(--ls-rose-bg);
+  font-size: .95rem; font-weight: 600; color: #FFD5DB; line-height: 1.4;
+}
+.ls-demo-note svg { flex: none; width: 1.5rem; height: 1.5rem; color: var(--ls-rose); }
+@media (max-width: 820px) {
+  .ls-hero { flex-wrap: wrap; }
+  .ls-demo-badge { margin-left: 0; width: 100%; box-sizing: border-box; }
+}
+@media (max-width: 640px) {
+  .ls-demo-banner { padding: .75rem .85rem; }
+  .ls-demo-banner-title { font-size: 1.05rem; }
+  .ls-demo-guide-title { font-size: 1.08rem; }
+  .ls-demo-banner-main svg { width: 1.9rem; height: 1.9rem; }
+}
 </style>
 """
 
@@ -647,12 +696,13 @@ def inject_theme() -> None:
     st.markdown(_CSS, unsafe_allow_html=True)
 
 
-def hero(title: str, subtitle: str, tagline: str = "") -> None:
-    """Brand band: logo mark, product title, subtitle and tagline."""
+def hero(title: str, subtitle: str, tagline: str = "", demo: bool = False) -> None:
+    """Brand band: logo mark, product title, subtitle and tagline (and the demo indicator)."""
     tag = f'<div class="ls-hero-tag">{tagline}</div>' if tagline else ""
+    badge = demo_badge() if demo else ""
     st.markdown(
         f'<div class="ls-hero">{logo_html()}<div class="ls-hero-text">'
-        f'<h1>{title}</h1><div class="ls-hero-sub">{subtitle}</div>{tag}</div></div>',
+        f'<h1>{title}</h1><div class="ls-hero-sub">{subtitle}</div>{tag}</div>{badge}</div>',
         unsafe_allow_html=True,
     )
 
@@ -669,3 +719,86 @@ def pill(text: str, kind: str = "") -> str:
     """Return HTML for a status pill; kind is '', 'ok', 'warn' or 'idle'."""
     cls = {"ok": " ls-pill-ok", "warn": " ls-pill-warn", "idle": " ls-pill-idle"}.get(kind, "")
     return f'<span class="ls-pill{cls}">{text}</span>'
+
+
+_ICON_BAN = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    'stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/>'
+    '<path d="M5.6 5.6l12.8 12.8"/></svg>'
+)
+_ICON_BOOK = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    '<path d="M3 5.5C5 4.5 8.5 4.5 12 6c3.5-1.5 7-1.5 9-.5V19c-2-1-5.5-1-9 .5-3.5-1.5-7-1.5-9-.5z"/>'
+    '<path d="M12 6v13.5"/></svg>'
+)
+_ICON_LIST = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6v3H9z"/>'
+    '<path d="M9 11h6M9 15h6"/></svg>'
+)
+_ICON_CHECK = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" '
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" '
+    'r="9"/><path d="M7.5 12.5l3 3 6-6.5"/></svg>'
+)
+
+DEMO_BADGE_LINES: tuple[str, str] = ("Showcasing real saved results", "No API usage")
+DEMO_BANNER_TITLE = "Public Demo: Live research and deck generation are disabled on this deployment."
+DEMO_BANNER_TEXT = (
+    "This demo showcases saved research runs only. No new research is executed and no API "
+    "calls are made."
+)
+DEMO_GUIDE_TITLE = "Public Demo: Live research is disabled. Pick a saved run below."
+DEMO_GUIDE_TEXT = (
+    "Explore real research results, replay the agent workflows and download the reports and "
+    "pitch decks."
+)
+DEMO_RESEARCH_NOTE = "Public demo: live research is disabled. Pick a saved run below."
+DEMO_DECK_NOTE = (
+    "Public demo: new pitch deck generation is disabled. Download the existing deck below."
+)
+
+
+def demo_badge() -> str:
+    """Compact header indicator (HTML); callers show it only in demo mode."""
+    return (
+        f'<div class="ls-demo-badge">{_ICON_BOOK}<div><div class="ls-demo-badge-title">'
+        f'DEMO MODE</div><div class="ls-demo-badge-line">{DEMO_BADGE_LINES[0]}</div>'
+        f'<div class="ls-demo-badge-line">{DEMO_BADGE_LINES[1]}</div></div></div>'
+    )
+
+
+def demo_banner() -> None:
+    """Announcement banner shown under the header in demo mode."""
+    st.markdown(
+        '<div class="ls-demo-banner"><div class="ls-demo-banner-main">'
+        f'{_ICON_BAN}<div><div class="ls-demo-banner-title">{DEMO_BANNER_TITLE}</div>'
+        f'<div class="ls-demo-banner-text">{DEMO_BANNER_TEXT}</div></div></div>'
+        '<div class="ls-demo-chips">'
+        f'<span class="ls-demo-chip">{_ICON_BAN}<span>Live research<br>disabled</span></span>'
+        f'<span class="ls-demo-chip">{_ICON_BAN}<span>New pitch deck<br>generation disabled'
+        "</span></span>"
+        f'<span class="ls-demo-chip ok">{_ICON_CHECK}<span>Explore saved runs<br>'
+        "download reports</span></span></div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def demo_guide() -> None:
+    """Blue guidance banner at the top of the Research Workspace in demo mode."""
+    st.markdown(
+        f'<div class="ls-demo-guide">{_ICON_LIST}<div>'
+        f'<div class="ls-demo-guide-title">{DEMO_GUIDE_TITLE}</div>'
+        f'<div class="ls-demo-guide-text">{DEMO_GUIDE_TEXT}</div></div></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def demo_note(text: str) -> None:
+    """Compact high-contrast notice under a disabled action in demo mode."""
+    st.markdown(
+        f'<div class="ls-demo-note" role="note">{_ICON_BAN}<span>{text}</span></div>',
+        unsafe_allow_html=True,
+    )

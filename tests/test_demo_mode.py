@@ -108,11 +108,15 @@ def _app() -> AppTest:
     return AppTest.from_file(APP, default_timeout=60).run()
 
 
+def _page_text(at: AppTest) -> str:
+    return " ".join(m.value for m in at.markdown)
+
+
 def test_demo_ui_opens_on_a_saved_run_with_replay_and_no_run_button(demo_env, monkeypatch):
     hits = _trap(monkeypatch)
     at = _app()
     assert not at.exception
-    assert any("Public demo" in i.value for i in at.info)
+    assert "Public Demo: Live research and deck generation are disabled" in _page_text(at)
     assert at.button(key="run_research").disabled is True
     assert at.selectbox(key="saved_run_select").value == L6  # newest curated run is shown
     for key in ("replay_restart", "replay_back", "replay_play", "replay_forward"):
@@ -123,6 +127,43 @@ def test_demo_ui_opens_on_a_saved_run_with_replay_and_no_run_button(demo_env, mo
     at.selectbox(key="saved_run_select").set_value(L5).run()
     assert not at.exception and at.session_state["replay_run"] == L5
     assert hits == []
+
+
+def test_demo_notices_are_shown_in_the_header_banner_workspace_and_deck_tab(demo_env):
+    at = _app()
+    page = _page_text(at)
+    assert not at.exception
+    for text in (
+        "DEMO MODE",
+        "Showcasing real saved results",
+        "No API usage",
+        "Public Demo: Live research and deck generation are disabled on this deployment.",
+        "This demo showcases saved research runs only. No new research is executed and no "
+        "API calls are made.",
+        "Public Demo: Live research is disabled. Pick a saved run below.",
+        "Explore real research results, replay the agent workflows and download the reports "
+        "and pitch decks.",
+        "Public demo: live research is disabled. Pick a saved run below.",
+        "Public demo: new pitch deck generation is disabled. Download the existing deck below.",
+    ):
+        assert text in page, text
+    assert not at.info and not at.caption or all("Public demo" not in c.value for c in at.caption)
+    assert at.button(key="run_research").disabled is True
+    assert at.button(key="deck_generate").disabled is True
+
+
+def test_live_mode_shows_no_demo_notices(monkeypatch, tmp_path):
+    monkeypatch.setenv(demo.MODE_ENV, "live")
+    monkeypatch.setenv(demo.RUNS_DIR_ENV, str(DEMO_RUNS))
+    set_manager(None)
+    try:
+        at = _app()
+    finally:
+        set_manager(None)
+    page = _page_text(at)
+    assert not at.exception
+    assert "DEMO MODE" not in page and "Public Demo" not in page and "Public demo" not in page
+    assert at.button(key="run_research").disabled is False
 
 
 def test_demo_blocks_submit_even_if_the_form_is_driven_directly(demo_env, monkeypatch):

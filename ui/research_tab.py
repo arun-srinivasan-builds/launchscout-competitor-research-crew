@@ -25,7 +25,7 @@ from launchscout.saved_runs import (
 )
 from launchscout.schemas import ResearchInput, ResearchMode
 from ui import cockpit, trace
-from ui.theme import section
+from ui.theme import DEMO_RESEARCH_NOTE, demo_guide, demo_note, section
 from ui.workflow import render_workflow_html
 
 MODE_LABELS = {
@@ -284,7 +284,7 @@ def _render_input_panel(
             "Run Research", type="primary", key="run_research", disabled=active or demo
         )
         if demo:
-            st.caption("Public demo: live research is disabled. Pick a saved run below.")
+            demo_note(DEMO_RESEARCH_NOTE)
         cancelled = False
         if active:
             cancelled = st.button("Cancel run", key="cancel_run")
@@ -379,6 +379,8 @@ def _render_reuse_prompt(manager: RunManager, active: bool) -> None:
 def render() -> None:
     """Research Workspace: notices, two panels, workflow, then the cockpit or the live trace."""
     manager = get_manager()
+    if is_demo():
+        demo_guide()
     if st.session_state.pop(RESET_SAVED_KEY, False):
         st.session_state[SAVED_SELECT_KEY] = ""  # a new run or reuse returns to the live view
     run_id: str | None = st.session_state.get(SESSION_RUN_KEY) or manager.latest_run_id()

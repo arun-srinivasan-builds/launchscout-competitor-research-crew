@@ -4,19 +4,25 @@ from __future__ import annotations
 
 import streamlit as st
 
-from launchscout.demo import DEMO_NOTICE, is_demo
+from launchscout.demo import is_demo
 from ui import deck_tab, research_tab, weekly_tab
 from ui.chrome import inject_back_to_top
-from ui.theme import TAB_LABELS, hero, inject_theme
+from ui.theme import TAB_LABELS, demo_banner, hero, inject_theme
 
 
 def main() -> None:
     st.set_page_config(page_title="LaunchScout", page_icon=None, layout="wide")
     inject_theme()
     inject_back_to_top()
-    hero("LaunchScout", "Competitor Research Crew", "From market intelligence to launch strategy.")
-    if is_demo():
-        st.info(DEMO_NOTICE)
+    demo = is_demo()
+    hero(
+        "LaunchScout",
+        "Competitor Research Crew",
+        "From market intelligence to launch strategy.",
+        demo=demo,
+    )
+    if demo:
+        demo_banner()
     research, deck, weekly = st.tabs(list(TAB_LABELS))
     with research:
         research_tab.render()
