@@ -344,7 +344,8 @@ def test_generate_uses_one_agent_call_and_exports_editable_pptx(tmp_path, source
         assert {"Title", "Subtitle", "Labels", "Footer", "Evidence status"} <= names
         shown = next(s for s in slide.shapes if s.name == "Title").text_frame.text
         assert shown in SLIDE_NAMES  # the V3 slide name; the validated deck title is the subtitle
-        assert title in next(s for s in slide.shapes if s.name == "Subtitle").text_frame.text
+        notes = slide.notes_slide.notes_text_frame.text
+        assert "Validated deck title: " + title in notes
         assert slide.notes_slide.notes_text_frame.text is not None
     matrix = " ".join(s.text_frame.text for s in prs.slides[1].shapes if s.has_text_frame)
     assert "Alpha Juice" in matrix and "Beta Press" in matrix
@@ -657,24 +658,21 @@ def test_visual_components_present_and_editable(tmp_path, source):
     _, prs = _build(tmp_path, source)
     s1, s2, s3, s4, s5, s6 = prs.slides
     names1 = [s.name for s in s1.shapes]
-    assert {"Node 1", "Node 2", "Node 3"} <= set(names1)
-    assert sum(1 for n in names1 if n.startswith("Flow arrow")) == 2
-    assert sum(1 for n in names1 if n.startswith("Gauge: ") and n.endswith(" fill")) >= 1
+    assert sum(1 for n in names1 if n.startswith("Journey ") and n.endswith(" icon")) == 4
+    charts1 = [s for s in s1.shapes if getattr(s, "has_chart", False) and s.has_chart]
+    assert len(charts1) == 2  # native, editable doughnut gauges
     assert sum(1 for s in s2.shapes if s.name.startswith("Competitor: ")) == 2
     assert sum(1 for s in s2.shapes if s.name.startswith("Price: ")) == 2  # status chips
-    assert any(s.name.startswith("Coverage: ") for s in s2.shapes)
-    assert any(s.name.startswith("Insight card") for s in s3.shapes)
+    assert sum(1 for s in s2.shapes if s.name.startswith("Grid ")) >= 4  # evidence footprint
+    charts3 = [s for s in s3.shapes if getattr(s, "has_chart", False) and s.has_chart]
+    assert len(charts3) == 1 and charts3[0].chart.chart_type is not None  # native theme bars
     assert {"Value proposition", "Positioning tag"} <= {s.name for s in s4.shapes}
-    assert sum(1 for s in s4.shapes if s.name.startswith("Status card")) == 3
-    assert any(s.name.startswith("Phase badge") for s in s5.shapes)
+    assert sum(1 for s in s4.shapes if s.name.startswith("Flow arrow")) == 3
+    assert {"Stage 1", "Stage 2", "Stage 3", "Stage 4"} <= {s.name for s in s4.shapes}
+    assert sum(1 for s in s5.shapes if s.name.startswith("Journey stage")) >= 1
     warning = _shape(s6, "Price warning").text_frame.text
     assert warning == "RECOMMENDATION — NOT A VERIFIED MARKET PRICE"
     assert _shape(s6, "Price value").text_frame.text == "₹99"
-    milestones = sum(
-        1 for s in s6.shapes if s.name.startswith("Milestone ") and s.name[10:].isdigit()
-    )
-    assert milestones == 2  # the fixture plan has two weeks; cards follow the data
-    assert sum(1 for s in s6.shapes if s.name.startswith("Timeline link")) == milestones - 1
     for slide in prs.slides:
         assert all(s.shape_type != 13 or s.name == "LS logo" for s in slide.shapes)
 
@@ -764,7 +762,7 @@ def _chips(prs):
 def test_status_badges_never_wrap_and_hold_their_full_label(tmp_path, source):
     _, prs = _build(tmp_path, source)
     seen = {name for _, shape in _chips(prs) for name in [shape.name]}
-    assert "Positioning tag" in seen and any(n.startswith("Milestone tag") for n in seen)
+    assert "Positioning tag" in seen and "Evidence status" in seen
     for number, shape in _chips(prs):
         frame = shape.text_frame
         label = frame.text
@@ -835,10 +833,12 @@ def test_v3_header_footer_and_sources_strip_on_every_slide(tmp_path, source):
         "Solution & Differentiation", "Go-to-Market Strategy", "Financials & Roadmap",
     )
     for number, (slide, name) in enumerate(zip(prs.slides, names, strict=True), 1):
-        assert _shape(slide, "Slide index").text_frame.text == f"{number:02d}"
+        assert _shape(slide, "Slide index").text_frame.text == f"{number:02d}."
         assert _shape(slide, "Title").text_frame.text == name
         footer = _shape(slide, "Footer").text_frame.text
         assert footer.startswith("LaunchScout | " + name) and "Partial evidence" in footer
+        assert source.run_id not in footer  # a shortened run id is shown; the full id is in notes
+        assert source.run_id in slide.notes_slide.notes_text_frame.text
         assert _shape(slide, "Sources").text_frame.text.startswith("Sources:")
 
 
@@ -848,3 +848,22 @@ def test_v3_compact_rows_for_many_competitors_keep_status_chips(tmp_path, source
     path, prs = _build(tmp_path, _more_competitors(source, 7), name="many.pptx")
     assert sum(1 for s in prs.slides[1].shapes if s.name.startswith("Price: ")) == 7
     assert check_text_bounds(path) == []
+
+
+def test_v4_on_slide_text_is_never_cut_with_an_ellipsis(tmp_path, source):
+    _, prs = _build(tmp_path, source)
+    cut = [
+        (n, s.name)
+        for n, slide in enumerate(prs.slides, 1)
+        for s in slide.shapes
+        if s.has_text_frame and s.text_frame.text.rstrip().endswith("…")
+    ]
+    assert cut == []
+
+
+def test_shorten_prefers_a_complete_clause_to_an_ellipsis():
+    from launchscout.exports.pptx_components import _shorten
+
+    text = "Confirm feasibility and service areas; decide choice or rotation and validate price"
+    assert _shorten(text, 50) == "Confirm feasibility and service areas"
+    assert _shorten("a" * 40, 20).endswith("…")  # no clause boundary: the last resort

@@ -496,3 +496,11 @@ None.
 - Evidence rules: unknown prices stay "PRICE UNKNOWN"; the recommended price is always labelled not a verified market price; no number, share, trend or review count is invented. Text shortened to fit keeps its full wording in the speaker notes.
 - Saved decks: only run c0fe has a stored deck specification; it was rebuilt offline with `scripts/rebuild_saved_deck.py` (demo_data and local runs/). Run 3824 has no stored deck and none was generated, because that needs a model call.
 - Validation: Ruff clean; 359 tests pass (deck tests updated for the V3 contract, 4 new); all six slides rendered through Microsoft PowerPoint (COM export) and inspected; layout check reports no overflow or collisions.
+
+### Pitch Deck V4: infographic-led visual redesign (15 Oct 2026, local commit; not pushed)
+- Correction round after the V3 layouts were rejected as report-like. Design gap against the approved reference: V3 used equal text panels, tables and truncated sentences; V4 uses a journey infographic and doughnut gauges (slide 1), competitor profile cards with an evidence-footprint grid (2), a native theme bar chart with attributed quote cards (3), a connected four-stage framework (4), a numbered launch journey with observed vs recommended lanes (5) and a price hero with price-evidence and decision checkpoints (6).
+- Same generation interface, claim check, evidence labels and six-slide contract; no model, search or network call; stored spec and generation record unchanged. Pictograms are native autoshapes; charts are native PowerPoint charts; the LS logo is the only picture.
+- Text on slides is a complete clause or sentence (`_shorten` now cuts at a clause boundary; no on-slide ellipses). Full wording, the validated deck title and the complete run id are in the speaker notes; the footer shows a short run id.
+- Theme bars are keyword matches over the stored testimonials and are labelled "not a sentiment score"; no figure, ranking or share is invented. "No complaints retrieved" is stated as absence of evidence, not as positive sentiment.
+- Only run c0fe has a stored deck specification and was rebuilt offline (`scripts/rebuild_saved_deck.py`); no L5 deck was fabricated.
+- Validation: Ruff clean; 361 tests pass; all six slides rendered through Microsoft PowerPoint and inspected.

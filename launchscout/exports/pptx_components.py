@@ -102,9 +102,24 @@ def _needed_pt(paras: Sequence[Para], width_pt: float) -> float:
     return total
 
 
+_BOUNDARIES = (". ", "; ", " — ", ": ", ", ")
+
+
 def _shorten(text: str, max_chars: int) -> str:
+    """Shorten to a complete clause where possible; an ellipsis is the last resort."""
     if len(text) <= max_chars:
         return text
+    window = text[: max(1, max_chars)]
+    floor = int(max_chars * 0.4)
+    best = -1
+    for sep in _BOUNDARIES:
+        at = window.rfind(sep)
+        if at >= floor:
+            best = max(best, at)
+    if best >= 0:
+        cut = window[:best].rstrip(",;:.- ")
+        if cut:
+            return cut + ("." if text[best : best + 2] == ". " else "")
     cut = text[: max(1, max_chars - 1)].rsplit(" ", 1)[0].rstrip(",;:.- ")
     return (cut or text[: max_chars - 1]) + "…"
 
@@ -120,7 +135,7 @@ def fit_paragraphs(paras: Sequence[Para], width_pt: float, height_pt: float) -> 
     while _needed_pt(work, width_pt) > height_pt and guard < 200:
         guard += 1
         longest = max(work, key=lambda p: len(p.text), default=None)
-        if longest is None or len(longest.text) <= 12:
+        if longest is None or len(longest.text) <= 30:
             break
         longest.text = _shorten(longest.text, int(len(longest.text) * 0.85))
         truncated = True
@@ -386,3 +401,46 @@ def split_widths(total: float, n: int, gap: float = GAP) -> list[float]:
     n = max(1, n)
     each = (total - gap * (n - 1)) / n
     return [each] * n
+
+
+# ---- pictograms built from native autoshapes (editable; no image assets) -----------------------
+def icon(slide, x: float, y: float, d: float, kind: str, fill: RGBColor, *, name: str):
+    """A round badge holding a simple white pictogram. Returns the circle."""
+    circle = box(slide, x, y, d, d, fill=fill, shape=MSO_SHAPE.OVAL, name=f"{name} icon")
+    g = d * 0.46
+    gx, gy = x + (d - g) / 2, y + (d - g) / 2
+
+    def glyph(shape, gx_, gy_, w, h, label):
+        return box(slide, gx_, gy_, w, h, fill=WHITE, shape=shape, name=f"{name} {label}")
+
+    if kind == "person":
+        glyph(MSO_SHAPE.OVAL, gx + g * 0.28, gy, g * 0.44, g * 0.44, "head")
+        glyph(MSO_SHAPE.ROUND_2_SAME_RECTANGLE, gx + g * 0.08, gy + g * 0.52, g * 0.84, g * 0.48,
+              "body")
+    elif kind == "target":
+        glyph(MSO_SHAPE.DONUT, gx, gy, g, g, "ring")
+        glyph(MSO_SHAPE.OVAL, gx + g * 0.34, gy + g * 0.34, g * 0.32, g * 0.32, "dot")
+    elif kind == "chart":
+        for i, h in enumerate((0.45, 0.75, 1.0)):
+            glyph(MSO_SHAPE.RECTANGLE, gx + i * g * 0.36, gy + g * (1 - h), g * 0.26, g * h,
+                  f"bar{i}")
+    elif kind == "speech":
+        glyph(MSO_SHAPE.ROUNDED_RECTANGULAR_CALLOUT, gx, gy, g, g * 0.82, "bubble")
+    elif kind == "doc":
+        glyph(MSO_SHAPE.FOLDED_CORNER, gx + g * 0.1, gy, g * 0.8, g, "page")
+    elif kind == "bolt":
+        glyph(MSO_SHAPE.LIGHTNING_BOLT, gx, gy, g, g, "bolt")
+    elif kind == "heart":
+        glyph(MSO_SHAPE.HEART, gx, gy + g * 0.05, g, g * 0.9, "heart")
+    elif kind == "star":
+        glyph(MSO_SHAPE.STAR_5_POINT, gx, gy, g, g, "star")
+    elif kind == "flag":
+        glyph(MSO_SHAPE.RECTANGLE, gx + g * 0.05, gy, g * 0.1, g, "pole")
+        glyph(MSO_SHAPE.RIGHT_TRIANGLE, gx + g * 0.15, gy, g * 0.8, g * 0.55, "flag")
+    elif kind == "tag":
+        glyph(MSO_SHAPE.PENTAGON, gx, gy + g * 0.15, g, g * 0.7, "tag")
+    elif kind == "check":
+        glyph(MSO_SHAPE.MATH_MULTIPLY, gx, gy, g, g, "mark")
+    else:
+        glyph(MSO_SHAPE.OVAL, gx + g * 0.2, gy + g * 0.2, g * 0.6, g * 0.6, "dot")
+    return circle
