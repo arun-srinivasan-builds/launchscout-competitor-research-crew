@@ -739,8 +739,16 @@ TRACKING_CSS = """
 .tk-run dd { margin: 0; color: var(--ls-text); overflow-wrap: anywhere; }
 .tk-run-mid { display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: .4rem; padding: 0 .4rem; text-align: center; font-size: .82rem; color: var(--ls-muted); }
-.tk-run-arrow { font-size: 1.6rem; color: var(--ls-teal); line-height: 1; }
-@media (max-width: 820px) { .tk-run-arrow { transform: rotate(90deg); } }
+.tk-vs { display: grid; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: 50%;
+  border: 1px solid var(--ls-teal); color: var(--ls-teal); background: rgba(45, 212, 191, 0.10);
+  font-size: .8rem; font-weight: 800; letter-spacing: .06em; }
+.tk-elig { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .8rem; box-sizing: border-box;
+  padding: .5rem .8rem; margin: .25rem 0 .9rem 0; border-radius: 10px;
+  border: 1px solid var(--ls-border); background: var(--ls-surface); }
+.tk-elig-label { font-size: .78rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ls-muted); }
+.tk-elig .ls-pill { margin: 0; }
+.tk-elig-note { font-size: .88rem; color: var(--ls-muted); }
 .tk-split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem;
   margin: 0 0 1.1rem 0; }
 @media (max-width: 900px) { .tk-split { grid-template-columns: minmax(0, 1fr); } }

@@ -22,7 +22,6 @@ from launchscout.tracking import (
     CompetitorChange,
     SnapshotInfo,
 )
-from ui.chrome import logo_html
 
 EM_DASH = "—"
 
@@ -80,8 +79,7 @@ def link(url: str) -> str:
 def header_html() -> str:
     return (
         '<div class="tk-hero">'
-        f"{logo_html()}"
-        '<div class="tk-hero-text"><div class="tk-eyebrow">Competitor intelligence</div>'
+        '<div class="tk-hero-text"><div class="tk-eyebrow">Market intelligence</div>'
         "<h2>Weekly Tracking</h2>"
         '<div class="tk-sub">What changed between two saved research runs of the same '
         "idea, with the evidence behind every finding.</div></div>"
@@ -157,7 +155,7 @@ def run_cards_html(result: Comparison) -> str:
     return (
         '<div class="tk-runs">'
         + _run_card("Baseline run", result.baseline)
-        + f'<div class="tk-run-mid"><span class="tk-run-arrow" aria-hidden="true">&rarr;</span>'
+        + f'<div class="tk-run-mid"><span class="tk-vs" aria-hidden="true">VS</span>'
         f'<span class="tk-run-scope">Same scope<br>{scope}</span></div>'
         + _run_card("Latest run", result.latest)
         + "</div>"

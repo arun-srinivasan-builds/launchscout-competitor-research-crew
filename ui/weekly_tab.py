@@ -59,7 +59,15 @@ def _scheduler_panel() -> None:
 def _render_comparison(result: Comparison) -> None:
     ok = result.eligible
     chips = pill("Comparison available" if ok else "Comparison unavailable", "ok" if ok else "warn")
-    _html(f'<div class="ls-card"><h4>Eligibility</h4>{chips}</div>')
+    note = (
+        "Both runs finished, cover the same idea and market, and the baseline is older."
+        if ok
+        else "These runs cannot be compared; see the reasons below."
+    )
+    _html(
+        '<div class="tk-elig"><span class="tk-elig-label">Eligibility</span>'
+        f'{chips}<span class="tk-elig-note">{note}</span></div>'
+    )
     if not ok:
         for reason in result.reasons:
             st.warning(reason)

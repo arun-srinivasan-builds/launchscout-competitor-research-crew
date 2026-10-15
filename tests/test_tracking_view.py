@@ -55,7 +55,7 @@ def comparison(rows: list[CompetitorChange], eligible: bool = True) -> Compariso
 def test_header_states_manual_offline_and_makes_no_scheduler_claim():
     html = view.header_html()
     assert "MANUAL" in html and "OFFLINE" in html and "Saved-run comparison" in html
-    assert "ls-logo-tile" in html  # the LS LaunchScout logo is reused
+    assert "ls-logo-tile" not in html  # the main app header already carries the logo
     assert "scheduled" not in html.lower() and "automatic" not in html.lower()
 
 
