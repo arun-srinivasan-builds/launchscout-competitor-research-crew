@@ -867,3 +867,21 @@ def test_shorten_prefers_a_complete_clause_to_an_ellipsis():
     text = "Confirm feasibility and service areas; decide choice or rotation and validate price"
     assert _shorten(text, 50) == "Confirm feasibility and service areas"
     assert _shorten("a" * 40, 20).endswith("…")  # no clause boundary: the last resort
+
+
+def test_v4_final_corrections_unknown_labels_checkpoints_and_chart_caption(tmp_path, source):
+    _, prs = _build(tmp_path, source)
+    s3, s4, s6 = prs.slides[2], prs.slides[3], prs.slides[5]
+    labels = [s.text_frame.text for s in s4.shapes if s.name.startswith("Unknown: ")]
+    assert labels
+    assert all(t.endswith(("NOT VERIFIED", "UNKNOWN")) for t in labels), labels
+    assert not any("verified unit price" in t.lower() for t in labels)
+    numbers = [
+        _shape(s6, f"Checkpoint {i}").text_frame.text
+        for i in range(1, 10)
+        if any(s.name == f"Checkpoint {i}" for s in s6.shapes)
+    ]
+    assert numbers == [str(i) for i in range(1, len(numbers) + 1)]
+    caption = _shape(s3, "Chart caveat").text_frame.text
+    assert "retrieved testimonials" in caption
+    assert "not independent customer survey results or sentiment scores" in caption

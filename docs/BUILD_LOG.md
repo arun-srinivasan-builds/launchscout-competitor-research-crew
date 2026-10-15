@@ -504,3 +504,8 @@ None.
 - Theme bars are keyword matches over the stored testimonials and are labelled "not a sentiment score"; no figure, ranking or share is invented. "No complaints retrieved" is stated as absence of evidence, not as positive sentiment.
 - Only run c0fe has a stored deck specification and was rebuilt offline (`scripts/rebuild_saved_deck.py`); no L5 deck was fabricated.
 - Validation: Ruff clean; 361 tests pass; all six slides rendered through Microsoft PowerPoint and inspected.
+
+### Pitch Deck V4 final corrections (15 Oct 2026, local commit; not pushed)
+- Wording and numbering only, V4 design frozen: slide 4 "Still unknown" labels now read "Unit price and pack size NOT VERIFIED" per competitor and "Weekly-plan variety terms UNKNOWN"; slide 6 decision checkpoints are numbered 1, 2, 3 while keeping their Week 1 / 3 / 4 labels; slide 3 chart caption now says theme counts are not independent customer survey results or sentiment scores.
+- Offline rebuild of run c0fe only (no L5 spec exists); stored spec and generation record unchanged. No model, search or network call. Pixel comparison of PowerPoint renders: slides 1, 2 and 5 identical; slides 3, 4, 6 differ only in the corrected regions (slide 4's status strip is slightly taller).
+- Ruff clean; 362 tests pass.

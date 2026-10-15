@@ -687,8 +687,9 @@ def _slide_customers(page: Page) -> None:
                   Para("No recurring theme could be derived from the retrieved feedback.", 13,
                        MUTED, after=0), pad=0.02, name="No themes")
     page.text(xl + 0.2, top + height - 0.9, wl - 0.4, 0.78,
-              Para(f"Keyword mentions across {len(findings)} retrieved testimonial(s). A "
-                   "theme count is not a sentiment score.", 11, MUTED, after=0, italic=True),
+              Para(f"Keyword mentions across {len(findings)} retrieved testimonials. Theme "
+                   "counts are not independent customer survey results or sentiment scores.",
+                   11, MUTED, after=0, italic=True),
               pad=0.02, name="Chart caveat")
 
     # middle: attributed highlights, one per competitor
@@ -778,7 +779,7 @@ def _slide_solution(page: Page) -> None:
               Para(positioning, 19, INK, bold=True, font=HEAD_FONT, italic=True, after=0),
               pad=0.02, anchor=MSO_ANCHOR.MIDDLE, name="Value proposition text")
 
-    strip_h = 0.82
+    strip_h = 1.1
     fy = top + hero_h + 0.2
     fh = top + height - fy - strip_h - 0.15
     arrow_w = 0.36
@@ -826,12 +827,21 @@ def _slide_solution(page: Page) -> None:
               [Para("STILL UNKNOWN", 10.5, MUTED, bold=True, after=0),
                Para("not assumed", 10.5, MUTED, after=0)], pad=0.02,
               anchor=MSO_ANCHOR.MIDDLE, name="Unknowns heading")
-    unknown = [f"{n}: verified unit price and pack size" for n in ctx.unverified[:3]]
+    unknown = [f"{n}: Unit price and pack size NOT VERIFIED" for n in ctx.unverified[:3]]
     for b in spec.bullets:
-        if "unknown" in b.lower() and len(unknown) < 4:
-            unknown.append(_clause(b, 70))
-    _pills(page, MARGIN_X + 2.0, sy + 0.12, CONTENT_W - 2.2, unknown or ["Nothing flagged"],
-           GOLD_LIGHT, GOLD, size=10.5, h=0.3, name="Unknown")
+        m = re.match(r"^(.+?)['’]s?\s+(.+?)\s+(?:are|is)\s+unknown", _plain(b), re.I)
+        if m and len(unknown) < 5:
+            topic = m.group(2).strip()
+            unknown.append(f"{m.group(1).strip()}: {topic[:1].upper()}{topic[1:]} UNKNOWN")
+    items = unknown or ["Nothing flagged"]
+    col_w = (CONTENT_W - 2.2 - 0.15) / 2
+    for k, label in enumerate(items[:6]):
+        px = MARGIN_X + 2.0 + (k % 2) * (col_w + 0.15)
+        py = sy + 0.14 + (k // 2) * 0.4
+        page.text(px, py, col_w, 0.32, Para(label, 10.5, GOLD, bold=True, align=PP_ALIGN.CENTER,
+                                            after=0), fill=GOLD_LIGHT, line=GOLD,
+                  shape=MSO_SHAPE.ROUNDED_RECTANGLE, pad=0.08, anchor=MSO_ANCHOR.MIDDLE,
+                  wrap=False, name=f"Unknown: {label}")
     notes.append("Framework: observed evidence, inferred gap, proposed solution, differentiation")
     page.finish(notes)
 
@@ -1028,7 +1038,7 @@ def _slide_financials(page: Page) -> None:
     for i, (label, clause) in enumerate(points[:4]):
         y = top + 0.55 + i * ph
         page.text(xc + 0.2, y + 0.05, 0.56, 0.56,
-                  Para(label.split()[-1], 16, WHITE, bold=True, font=HEAD_FONT,
+                  Para(str(i + 1), 16, WHITE, bold=True, font=HEAD_FONT,
                        align=PP_ALIGN.CENTER, after=0), fill=BURGUNDY, shape=MSO_SHAPE.OVAL,
                   pad=0.0, anchor=MSO_ANCHOR.MIDDLE, wrap=False, name=f"Checkpoint {i + 1}")
         page.text(xc + 0.9, y, wc - 1.1, ph - 0.1,
